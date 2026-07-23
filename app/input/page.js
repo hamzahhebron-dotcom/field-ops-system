@@ -13,9 +13,17 @@ export default function InputPage() {
 
   useEffect(() => {
     const init = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
+    const { data: { session } } = await supabase.auth.getSession()
       if (!session) {
         router.push('/login')
+        return
+      }
+      const check = await fetch('/api/whoami', {
+        headers: { 'Authorization': `Bearer ${session.access_token}` },
+      })
+      const me = await check.json()
+      if (me.role !== 'editor') {
+        router.push('/view')
         return
       }
       // Load active visits into the dropdown
