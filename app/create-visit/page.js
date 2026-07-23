@@ -14,8 +14,19 @@ export default function CreateVisitPage() {
 
   useEffect(() => {
     const checkAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) router.push('/login')
+    const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        router.push('/login')
+        return
+      }
+      const check = await fetch('/api/whoami', {
+        headers: { 'Authorization': `Bearer ${session.access_token}` },
+      })
+      const me = await check.json()
+      if (me.role !== 'editor') {
+        router.push('/view')
+        return
+      }
     }
     checkAuth()
   }, [])
