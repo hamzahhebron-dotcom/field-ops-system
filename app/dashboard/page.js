@@ -62,7 +62,11 @@ export default function Dashboard() {
     }
     return colors[status] || '#94a3b8'
   }
-
+const formatTime = (iso) => {
+    if (!iso) return ''
+    const d = new Date(iso)
+    return d.toLocaleDateString() + ' · ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  }
   const statusLabel = (status) => {
     const labels = {
       planned: 'Planned',
