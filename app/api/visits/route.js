@@ -39,13 +39,11 @@ export async function GET() {
       return NextResponse.json({ error: error.message }, { status: 400 })
     }
 
-    // Fetch all updates, newest first
     const { data: allUpdates } = await supabaseAdmin
       .from('visit_updates')
       .select('id, visit_id, raw_text, cleaned_readable_update, created_at')
       .order('created_at', { ascending: false })
 
-    // Attach the 2 most recent updates to each visit
     const visits = data.map(v => {
       const updatesForVisit = (allUpdates || []).filter(
         u => u.visit_id === v.id
@@ -57,6 +55,54 @@ export async function GET() {
     })
 
     return NextResponse.json({ visits })
+  } catch (err) {
+    return NextResponse.json({ error: 'Server error' }, { status: 500 })
+  }
+}
+
+// Archive or unarchive a visit
+export async function PATCH(request) {
+  try {
+    const body = await request.json()
+
+    if (!body.visit_id) {
+      return NextResponse.json({ error: 'Missing visit id' }, { status: 400 })
+    }
+
+    const { error } = await supabaseAdmin
+      .from('visits')
+      .update({ archived: body.archived === true })
+      .eq('id', body.visit_id)
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+
+    return NextResponse.json({ success: true })
+  } catch (err) {
+    return NextResponse.json({ error: 'Server error' }, { status: 500 })
+  }
+}
+
+// Permanently delete a visit (and its updates)
+export async function DELETE(request) {
+  try {
+    const body = await request.json()
+
+    if (!body.visit_id) {
+      return NextResponse.json({ error: 'Missing visit id' }, { status: 400 })
+    }
+
+    const { error } = await supabaseAdmin
+      .from('visits')
+      .delete()
+      .eq('id', body.visit_id)
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+
+    return NextResponse.json({ success: true })
   } catch (err) {
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
   }
