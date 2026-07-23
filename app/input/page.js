@@ -78,6 +78,16 @@ export default function InputPage() {
         width: '100%',
         maxWidth: '500px'
       }}>
+  <a href="/dashboard" style={{
+          display: 'inline-block',
+          marginBottom: '1rem',
+          color: '#1a56db',
+          textDecoration: 'none',
+          fontWeight: 600,
+          fontSize: '0.9rem'
+        }}>
+          ← Back to Dashboard
+        </a>
         <h1 style={{ marginBottom: '0.25rem', fontSize: '1.4rem' }}>
           📡 Submit Field Update
         </h1>
