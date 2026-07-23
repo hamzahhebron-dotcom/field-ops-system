@@ -27,7 +27,7 @@ export async function POST(request) {
   }
 }
 
-// Get all visits
+// Get all visits (each with its 2 latest updates)
 export async function GET() {
   try {
     const { data, error } = await supabaseAdmin
@@ -39,7 +39,24 @@ export async function GET() {
       return NextResponse.json({ error: error.message }, { status: 400 })
     }
 
-    return NextResponse.json({ visits: data })
+    // Fetch all updates, newest first
+    const { data: allUpdates } = await supabaseAdmin
+      .from('visit_updates')
+      .select('id, visit_id, raw_text, cleaned_readable_update, created_at')
+      .order('created_at', { ascending: false })
+
+    // Attach the 2 most recent updates to each visit
+    const visits = data.map(v => {
+      const updatesForVisit = (allUpdates || []).filter(
+        u => u.visit_id === v.id
+      )
+      return {
+        ...v,
+        recent_updates: updatesForVisit.slice(0, 2),
+      }
+    })
+
+    return NextResponse.json({ visits })
   } catch (err) {
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
   }
