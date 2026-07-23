@@ -123,3 +123,28 @@ export async function POST(request) {
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
   }
 }
+// Get all updates for a visit (?visit_id=xxx), oldest first
+export async function GET(request) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const visitId = searchParams.get('visit_id')
+
+    if (!visitId) {
+      return NextResponse.json({ error: 'Missing visit_id' }, { status: 400 })
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('visit_updates')
+      .select('*')
+      .eq('visit_id', visitId)
+      .order('created_at', { ascending: true })
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+
+    return NextResponse.json({ updates: data })
+  } catch (err) {
+    return NextResponse.json({ error: 'Server error' }, { status: 500 })
+  }
+}
