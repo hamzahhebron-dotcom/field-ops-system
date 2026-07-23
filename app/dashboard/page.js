@@ -25,6 +25,14 @@ export default function Dashboard() {
         router.push('/login')
         return
       }
+      const check = await fetch('/api/whoami', {
+        headers: { 'Authorization': `Bearer ${session.access_token}` },
+      })
+      const me = await check.json()
+      if (me.role !== 'editor') {
+        router.push('/view')
+        return
+      }
       setUser(session.user)
       loadVisits()
     }
