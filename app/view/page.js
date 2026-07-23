@@ -39,6 +39,12 @@ export default function ViewOnlyPage() {
     router.push('/login')
   }
 
+  const formatTime = (iso) => {
+    if (!iso) return ''
+    const d = new Date(iso)
+    return d.toLocaleDateString() + ' · ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  }
+
   const statusColor = (status) => {
     const colors = {
       planned: '#64748b',
@@ -189,18 +195,40 @@ export default function ViewOnlyPage() {
               </div>
             )}
 
-            {v.latest_update && (
-              <div style={{
-                marginTop: '0.75rem',
-                background: '#f8fafc',
-                padding: '0.75rem',
-                borderRadius: '8px',
-                fontSize: '0.9rem',
-                color: '#334155'
-              }}>
-                💬 {v.latest_update}
+            {v.recent_updates && v.recent_updates.length > 0 && (
+              <div style={{ marginTop: '0.75rem', display: 'grid', gap: '0.5rem' }}>
+                {v.recent_updates.map((u, i) => (
+                  <div key={u.id} style={{
+                    background: '#f8fafc',
+                    padding: '0.6rem 0.75rem',
+                    borderRadius: '8px',
+                    fontSize: '0.9rem',
+                    color: '#334155'
+                  }}>
+                    <div style={{
+                      fontSize: '0.75rem',
+                      color: '#94a3b8',
+                      fontWeight: 600,
+                      marginBottom: '0.2rem'
+                    }}>
+                      {i === 0 ? '💬 Latest update' : '💬 Earlier update'} · 🕐 {formatTime(u.created_at)}
+                    </div>
+                    {u.cleaned_readable_update || u.raw_text}
+                  </div>
+                ))}
               </div>
             )}
+
+            <a href={'/visit/' + v.id} style={{
+              display: 'inline-block',
+              marginTop: '0.75rem',
+              color: '#1a56db',
+              textDecoration: 'none',
+              fontWeight: 600,
+              fontSize: '0.85rem'
+            }}>
+              📜 View full history →
+            </a>
           </div>
         ))}
       </div>
