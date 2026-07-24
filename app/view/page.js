@@ -83,6 +83,15 @@ export default function ViewOnlyPage() {
     return labels[status] || status
   }
 
+  const updateFlags = (u) => {
+    const flags = []
+    if (u.security_issue) flags.push({ label: '🔴 Security', bg: '#fee2e2', color: '#991b1b' })
+    if (u.delay_flag) flags.push({ label: '⚠️ Delay', bg: '#fef3c7', color: '#92400e' })
+    if (u.access_denied) flags.push({ label: '🚧 Access Denied', bg: '#f3e8ff', color: '#6b21a8' })
+    if (u.data_quality_issue) flags.push({ label: '📉 Data Quality', bg: '#e0f2fe', color: '#075985' })
+    return flags
+  }
+
   if (!user) return <p style={{ padding: '2rem' }}>Loading...</p>
 
   const visibleVisits = visits.filter(v => !v.archived)
@@ -135,25 +144,47 @@ export default function ViewOnlyPage() {
 
       {v.recent_updates && v.recent_updates.length > 0 && (
         <div style={{ marginTop: '0.75rem', display: 'grid', gap: '0.5rem' }}>
-          {v.recent_updates.map((u, i) => (
-            <div key={u.id} style={{
-              background: '#f8fafc',
-              padding: '0.6rem 0.75rem',
-              borderRadius: '8px',
-              fontSize: '0.9rem',
-              color: '#334155'
-            }}>
-              <div style={{
-                fontSize: '0.75rem',
-                color: '#94a3b8',
-                fontWeight: 600,
-                marginBottom: '0.2rem'
+          {v.recent_updates.map((u, i) => {
+            const flags = updateFlags(u)
+            return (
+              <div key={u.id} style={{
+                background: '#f8fafc',
+                padding: '0.6rem 0.75rem',
+                borderRadius: '8px',
+                fontSize: '0.9rem',
+                color: '#334155',
+                borderLeft: flags.length > 0
+                  ? (u.security_issue ? '3px solid #dc2626' : '3px solid #f59e0b')
+                  : 'none'
               }}>
-                {i === 0 ? '💬 Latest update' : '💬 Earlier update'} · 🕐 {formatTimeInRegion(u.created_at, v.region)}
+                <div style={{
+                  fontSize: '0.75rem',
+                  color: '#94a3b8',
+                  fontWeight: 600,
+                  marginBottom: '0.2rem'
+                }}>
+                  {i === 0 ? '💬 Latest update' : '💬 Earlier update'} · 🕐 {formatTimeInRegion(u.created_at, v.region)}
+                </div>
+                {u.cleaned_readable_update || u.raw_text}
+                {flags.length > 0 && (
+                  <div style={{ marginTop: '0.35rem', display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
+                    {flags.map(f => (
+                      <span key={f.label} style={{
+                        background: f.bg,
+                        color: f.color,
+                        padding: '0.1rem 0.5rem',
+                        borderRadius: '6px',
+                        fontSize: '0.72rem',
+                        fontWeight: 600
+                      }}>
+                        {f.label}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
-              {u.cleaned_readable_update || u.raw_text}
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
 
