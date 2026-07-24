@@ -7,16 +7,28 @@ import { formatTimeInRegion, regionLabel } from '../../lib/regions'
 export default function Dashboard() {
   const [user, setUser] = useState(null)
   const [visits, setVisits] = useState([])
+  const [flaggedCount, setFlaggedCount] = useState(0)
   const [lastRefresh, setLastRefresh] = useState(null)
   const [message, setMessage] = useState('')
   const router = useRouter()
 
-  const loadVisits = async () => {
-    const res = await fetch('/api/visits')
-    const data = await res.json()
-    if (data.visits) {
-      setVisits(data.visits)
+  const loadData = async () => {
+    const [vRes, fRes] = await Promise.all([
+      fetch('/api/visits'),
+      fetch('/api/updates?flagged=true'),
+    ])
+    const vData = await vRes.json()
+    const fData = await fRes.json()
+
+    if (vData.visits) {
+      setVisits(vData.visits)
       setLastRefresh(new Date().toLocaleTimeString())
+
+      if (fData.updates) {
+        // Count flagged events belonging to non-archived visits
+        const visibleIds = vData.visits.filter(v => !v.archived).map(v => v.id)
+        setFlaggedCount(fData.updates.filter(u => visibleIds.includes(u.visit_id)).length)
+      }
     }
   }
 
@@ -36,11 +48,11 @@ export default function Dashboard() {
         return
       }
       setUser(session.user)
-      loadVisits()
+      loadData()
     }
     init()
 
-    const interval = setInterval(loadVisits, 30000)
+    const interval = setInterval(loadData, 30000)
     return () => clearInterval(interval)
   }, [])
 
@@ -60,7 +72,7 @@ export default function Dashboard() {
       setMessage('❌ ' + data.error)
     } else {
       setMessage('✅ Visit archived')
-      loadVisits()
+      loadData()
     }
   }
 
@@ -101,9 +113,6 @@ export default function Dashboard() {
   const visibleVisits = visits.filter(v => !v.archived)
   const activeVisits = visibleVisits.filter(v => !v.completed)
   const completedVisits = visibleVisits.filter(v => v.completed)
-  const flaggedCount = activeVisits.filter(
-    v => v.delay_flag || v.return_anomaly_flag || v.overdue_contact_flag
-  ).length
 
   const renderCard = (v) => (
     <div key={v.id} style={{
@@ -148,26 +157,6 @@ export default function Dashboard() {
           {v.completed ? '✔️ Completed' : statusLabel(v.current_status)}
         </span>
       </div>
-
-      {!v.completed && (v.delay_flag || v.return_anomaly_flag || v.overdue_contact_flag) && (
-        <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-          {v.delay_flag && (
-            <span style={{ background: '#fef3c7', color: '#92400e', padding: '0.2rem 0.6rem', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 600 }}>
-              ⚠️ Delay
-            </span>
-          )}
-          {v.return_anomaly_flag && (
-            <span style={{ background: '#fee2e2', color: '#991b1b', padding: '0.2rem 0.6rem', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 600 }}>
-              🔴 Return Anomaly
-            </span>
-          )}
-          {v.overdue_contact_flag && (
-            <span style={{ background: '#fee2e2', color: '#991b1b', padding: '0.2rem 0.6rem', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 600 }}>
-              📵 Overdue Contact
-            </span>
-          )}
-        </div>
-      )}
 
       {v.recent_updates && v.recent_updates.length > 0 && (
         <div style={{ marginTop: '0.75rem', display: 'grid', gap: '0.5rem' }}>
@@ -299,12 +288,20 @@ export default function Dashboard() {
           <div style={{ fontSize: '1.6rem', fontWeight: 700 }}>{activeVisits.length}</div>
           <div style={{ color: '#666', fontSize: '0.85rem' }}>Active Visits</div>
         </div>
-        <div style={{ background: 'white', padding: '1rem', borderRadius: '10px', boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}>
+        <a href="/flagged" style={{
+          background: 'white',
+          padding: '1rem',
+          borderRadius: '10px',
+          boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
+          textDecoration: 'none',
+          display: 'block',
+          border: flaggedCount > 0 ? '1px solid #fecaca' : '1px solid transparent'
+        }}>
           <div style={{ fontSize: '1.6rem', fontWeight: 700, color: flaggedCount > 0 ? '#dc2626' : '#16a34a' }}>
             {flaggedCount}
           </div>
-          <div style={{ color: '#666', fontSize: '0.85rem' }}>Flagged</div>
-        </div>
+          <div style={{ color: '#666', fontSize: '0.85rem' }}>🚩 Flagged Events →</div>
+        </a>
         <div style={{ background: 'white', padding: '1rem', borderRadius: '10px', boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}>
           <div style={{ fontSize: '1.6rem', fontWeight: 700 }}>{completedVisits.length}</div>
           <div style={{ color: '#666', fontSize: '0.85rem' }}>Completed</div>
