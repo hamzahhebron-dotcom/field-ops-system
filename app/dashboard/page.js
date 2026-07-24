@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useRouter } from 'next/navigation'
+import { formatTimeInRegion, regionLabel } from '../../lib/regions'
 
 export default function Dashboard() {
   const [user, setUser] = useState(null)
@@ -61,12 +62,6 @@ export default function Dashboard() {
       setMessage('✅ Visit archived')
       loadVisits()
     }
-  }
-
-  const formatTime = (iso) => {
-    if (!iso) return ''
-    const d = new Date(iso)
-    return d.toLocaleDateString() + ' · ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   }
 
   const statusColor = (status) => {
@@ -132,10 +127,13 @@ export default function Dashboard() {
           </div>
           <div style={{ color: '#666', fontSize: '0.9rem', marginTop: '0.15rem' }}>
             📍 {v.target_location}
+            {v.region && (
+              <span style={{ color: '#94a3b8' }}> · {regionLabel(v.region)}</span>
+            )}
           </div>
           {v.completed && v.arrival_home_base_time && (
             <div style={{ color: '#334155', fontSize: '0.85rem', marginTop: '0.3rem', fontWeight: 600 }}>
-              ✔️ Completed: {formatTime(v.arrival_home_base_time)}
+              ✔️ Completed: {formatTimeInRegion(v.arrival_home_base_time, v.region)}
             </div>
           )}
         </div>
@@ -187,7 +185,7 @@ export default function Dashboard() {
                 fontWeight: 600,
                 marginBottom: '0.2rem'
               }}>
-                {i === 0 ? '💬 Latest update' : '💬 Earlier update'} · 🕐 {formatTime(u.created_at)}
+                {i === 0 ? '💬 Latest update' : '💬 Earlier update'} · 🕐 {formatTimeInRegion(u.created_at, v.region)}
               </div>
               {u.cleaned_readable_update || u.raw_text}
             </div>
@@ -317,7 +315,6 @@ export default function Dashboard() {
         <p style={{ marginBottom: '1rem', fontSize: '0.9rem' }}>{message}</p>
       )}
 
-      {/* Active visits */}
       <h2 style={{ fontSize: '1.1rem', marginBottom: '0.75rem' }}>🟢 Active Visits</h2>
       {activeVisits.length === 0 && (
         <p style={{ color: '#666' }}>No active visits.</p>
@@ -326,7 +323,6 @@ export default function Dashboard() {
         {activeVisits.map(renderCard)}
       </div>
 
-      {/* Completed visits */}
       {completedVisits.length > 0 && (
         <>
           <h2 style={{ fontSize: '1.1rem', marginBottom: '0.75rem' }}>✔️ Completed Visits</h2>
