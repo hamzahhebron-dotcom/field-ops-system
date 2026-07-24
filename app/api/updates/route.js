@@ -1,7 +1,6 @@
 import { supabaseAdmin } from '../../../lib/supabaseAdmin'
 import { NextResponse } from 'next/server'
 
-// The 6 button events and what they mean
 const STATUS_EVENTS = {
   departed_to_location: {
     label: 'Departed to location',
@@ -30,7 +29,7 @@ const STATUS_EVENTS = {
   },
   arrived_at_base: {
     label: 'Arrived at home base — visit complete',
-    visit_status: 'returned',
+    visit_status: 'completed',
     time_field: 'arrival_home_base_time',
   },
 }
@@ -40,27 +39,30 @@ async function parseWithAI(rawText) {
 
 The JSON must have exactly this structure:
 {
-  "activityId": string or null,
-  "enumeratorName": string or null,
-  "status": one of "departed" | "arrived" | "in_progress" | "collection_done" | "returning" | "returned" | "delayed" | "issue" | "unknown",
+  "status": one of "departed" | "arrived" | "in_progress" | "collection_done" | "returning" | "delayed" | "issue" | "unknown",
   "currentLocation": string or null,
-  "updateTime": ISO 8601 datetime string or null,
   "riskLevel": one of "none" | "low" | "medium" | "high",
   "securityIssue": true or false,
   "delayFlag": true or false,
-  "nextCheckIn": ISO 8601 datetime string or null,
+  "accessDenied": true or false,
+  "dataQualityIssue": true or false,
   "cleanedReadableUpdate": string (a clean one-sentence English summary),
   "confidence": number between 0 and 1,
   "needsHumanReview": true or false
 }
 
+FLAG DEFINITIONS:
+- securityIssue: any security concern — incidents, threats, detention, shooting, closures for security reasons, checkpoint trouble beyond routine waiting.
+- delayFlag: the enumerator is delayed or running behind schedule.
+- accessDenied: the enumerator was refused entry, turned away, the site was closed, or permission was denied — the visit could not proceed as planned.
+- dataQualityIssue: data collection was incomplete or compromised — respondents unavailable, not all beneficiaries reached, tools could not be applied, sampling failed.
+
 STRICT RULES:
-- Do NOT invent information that is not in the text. Use null for anything not mentioned.
+- Do NOT invent information that is not in the text. Flags are false unless the text clearly indicates them.
 - Only set "status" if the text CLEARLY states a movement or stage change. Otherwise use "unknown".
-- If the text is unclear, contradictory, or you are not confident, set needsHumanReview to true and confidence below 0.5.
+- NEVER set status to any completion or return state based on future plans or intentions.
+- If the text is unclear or you are not confident, set needsHumanReview to true and confidence below 0.5.
 - If the text is in Arabic, translate and summarize it in English in cleanedReadableUpdate.
-- If a time is mentioned without a date, assume today's date: ${new Date().toISOString().split('T')[0]}.
-- If any security concern is mentioned (checkpoints, incidents, threats, detention, shooting, closure), set securityIssue to true and riskLevel to at least "medium".
 - Return ONLY the JSON object. Nothing else.`
 
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -110,7 +112,7 @@ export async function POST(request) {
 
     const results = []
 
-    // ---- 1. Handle button event (no AI needed — it's exact) ----
+    // ---- 1. Button event (exact, no AI, never flagged) ----
     if (hasEvent) {
       const event = STATUS_EVENTS[body.status_event]
       const now = new Date().toISOString()
@@ -133,7 +135,6 @@ export async function POST(request) {
       }
       results.push(eventRow)
 
-      // Update the visit record
       const visitUpdate = {
         current_status: event.visit_status,
         latest_update: event.label,
@@ -141,7 +142,6 @@ export async function POST(request) {
       if (event.time_field) {
         visitUpdate[event.time_field] = now
       }
-      // Arriving home closes the visit
       if (body.status_event === 'arrived_at_base') {
         visitUpdate.completed = true
       }
@@ -152,7 +152,7 @@ export async function POST(request) {
         .eq('id', body.visit_id)
     }
 
-    // ---- 2. Handle free-text comment (AI parsed) ----
+    // ---- 2. Free-text comment (AI parsed, flags attach to THIS update only) ----
     if (hasComment) {
       let ai = null
       try {
@@ -168,11 +168,11 @@ export async function POST(request) {
           raw_text: body.raw_text,
           parsed_status: ai ? ai.status : null,
           parsed_location: ai ? ai.currentLocation : null,
-          parsed_update_time: ai ? ai.updateTime : null,
           parsed_risk_level: ai ? ai.riskLevel : null,
           security_issue: ai ? ai.securityIssue : false,
           delay_flag: ai ? ai.delayFlag : false,
-          next_check_in_at: ai ? ai.nextCheckIn : null,
+          access_denied: ai ? ai.accessDenied : false,
+          data_quality_issue: ai ? ai.dataQualityIssue : false,
           cleaned_readable_update: ai ? ai.cleanedReadableUpdate : null,
           ai_json: ai,
           confidence: ai ? ai.confidence : null,
@@ -186,15 +186,12 @@ export async function POST(request) {
       }
       results.push(commentRow)
 
-      // Comment only updates visit status if AI is confident AND no button was pressed
+      // Comment only updates the visit's latest text and (carefully) its status
       const visitUpdate = {
         latest_update: ai && ai.cleanedReadableUpdate ? ai.cleanedReadableUpdate : body.raw_text,
       }
       if (!hasEvent && ai && ai.status && ai.status !== 'unknown' && ai.confidence >= 0.7) {
         visitUpdate.current_status = ai.status
-      }
-      if (ai && ai.delayFlag) {
-        visitUpdate.delay_flag = true
       }
 
       await supabaseAdmin
@@ -209,11 +206,26 @@ export async function POST(request) {
   }
 }
 
-// Get all updates for a visit (?visit_id=xxx), oldest first
+// Get updates: for one visit (?visit_id=xxx) or all flagged updates (?flagged=true)
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url)
     const visitId = searchParams.get('visit_id')
+    const flaggedOnly = searchParams.get('flagged') === 'true'
+
+    if (flaggedOnly) {
+      const { data, error } = await supabaseAdmin
+        .from('visit_updates')
+        .select('*')
+        .or('security_issue.eq.true,delay_flag.eq.true,access_denied.eq.true,data_quality_issue.eq.true')
+        .order('created_at', { ascending: false })
+
+      if (error) {
+        return NextResponse.json({ error: error.message }, { status: 400 })
+      }
+
+      return NextResponse.json({ updates: data })
+    }
 
     if (!visitId) {
       return NextResponse.json({ error: 'Missing visit_id' }, { status: 400 })
