@@ -25,7 +25,7 @@ export default function InputPage() {
     const res = await fetch('/api/visits')
     const data = await res.json()
     if (data.visits) {
-      setVisits(data.visits.filter(v => !v.completed))
+      setVisits(data.visits.filter(v => !v.completed && !v.archived))
     }
   }
 
@@ -48,6 +48,8 @@ export default function InputPage() {
     }
     init()
   }, [])
+
+  const selectedVisitData = visits.find(v => v.id === selectedVisit)
 
   const handleSubmit = async () => {
     if (!selectedVisit) {
@@ -79,9 +81,66 @@ export default function InputPage() {
     } else {
       if (selectedEvent === 'arrived_at_base') {
         setMessage('✅ Update saved. Visit completed and closed! 🎉')
+        setSelectedVisit('')
       } else {
         setMessage('✅ Update submitted successfully!')
       }
+      setSelectedEvent('')
+      setUpdateText('')
+      loadVisits()
+    }
+    setLoading(false)
+  }
+
+  const handleArchive = async () => {
+    if (!selectedVisit || !selectedVisitData) {
+      setMessage('❌ Select a visit first')
+      return
+    }
+    if (!confirm(`Archive "${selectedVisitData.activity_id} — ${selectedVisitData.enumerator_name}"?\n\nThe visit will move to the Archive. It can be restored later.`)) {
+      return
+    }
+
+    setLoading(true)
+    const res = await fetch('/api/visits', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ visit_id: selectedVisit, archived: true }),
+    })
+    const data = await res.json()
+    if (data.error) {
+      setMessage('❌ ' + data.error)
+    } else {
+      setMessage('📦 Visit archived')
+      setSelectedVisit('')
+      setSelectedEvent('')
+      setUpdateText('')
+      loadVisits()
+    }
+    setLoading(false)
+  }
+
+  const handleDelete = async () => {
+    if (!selectedVisit || !selectedVisitData) {
+      setMessage('❌ Select a visit first')
+      return
+    }
+    if (!confirm(`⚠️ PERMANENTLY DELETE "${selectedVisitData.activity_id} — ${selectedVisitData.enumerator_name}"?\n\nThis deletes the visit AND its entire update log forever, including any flagged events. This CANNOT be undone.\n\nClick OK to delete permanently.`)) {
+      return
+    }
+
+    setLoading(true)
+    const res = await fetch('/api/visits', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ visit_id: selectedVisit }),
+    })
+    const data = await res.json()
+    if (data.error) {
+      setMessage('❌ ' + data.error)
+    } else {
+      setMessage('🗑️ Visit permanently deleted')
+      setSelectedVisit('')
       setSelectedEvent('')
       setUpdateText('')
       loadVisits()
@@ -131,7 +190,7 @@ export default function InputPage() {
           </label>
           <select
             value={selectedVisit}
-            onChange={(e) => setSelectedVisit(e.target.value)}
+            onChange={(e) => { setSelectedVisit(e.target.value); setMessage('') }}
             style={{
               width: '100%',
               padding: '0.6rem 0.8rem',
@@ -231,8 +290,66 @@ export default function InputPage() {
             cursor: loading ? 'not-allowed' : 'pointer'
           }}
         >
-          {loading ? 'Submitting...' : 'Submit Update'}
+          {loading ? 'Working...' : 'Submit Update'}
         </button>
+
+        {/* Visit management — only shows when a visit is selected */}
+        {selectedVisit && (
+          <div style={{
+            marginTop: '1.5rem',
+            paddingTop: '1.25rem',
+            borderTop: '1px solid #e2e8f0'
+          }}>
+            <p style={{
+              margin: '0 0 0.6rem',
+              fontSize: '0.8rem',
+              color: '#94a3b8',
+              fontWeight: 600,
+              textTransform: 'uppercase',
+              letterSpacing: '0.04em'
+            }}>
+              Visit Management
+            </p>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button
+                type="button"
+                onClick={handleArchive}
+                disabled={loading}
+                style={{
+                  flex: 1,
+                  padding: '0.6rem',
+                  background: '#64748b',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '0.9rem',
+                  fontWeight: 600,
+                  cursor: loading ? 'not-allowed' : 'pointer'
+                }}
+              >
+                📦 Archive Visit
+              </button>
+              <button
+                type="button"
+                onClick={handleDelete}
+                disabled={loading}
+                style={{
+                  flex: 1,
+                  padding: '0.6rem',
+                  background: '#e53e3e',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '0.9rem',
+                  fontWeight: 600,
+                  cursor: loading ? 'not-allowed' : 'pointer'
+                }}
+              >
+                🗑️ Delete Visit
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </main>
   )
