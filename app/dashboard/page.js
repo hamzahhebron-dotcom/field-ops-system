@@ -139,14 +139,17 @@ export default function Dashboard() {
         gap: '0.5rem'
       }}>
         <div>
-          <div style={{ fontWeight: 700, fontSize: '1.05rem' }}>
-            {v.activity_id} — {v.enumerator_name}
+          <div style={{ fontWeight: 700, fontSize: '1.1rem' }}>
+            👤 {v.enumerator_name}
           </div>
-          <div style={{ color: '#666', fontSize: '0.9rem', marginTop: '0.15rem' }}>
+          <div style={{ color: '#475569', fontSize: '0.95rem', marginTop: '0.2rem', fontWeight: 600 }}>
             📍 {v.target_location}
             {v.region && (
-              <span style={{ color: '#94a3b8' }}> · {regionLabel(v.region)}</span>
+              <span style={{ fontWeight: 500, color: '#64748b' }}> — {regionLabel(v.region)}</span>
             )}
+          </div>
+          <div style={{ color: '#94a3b8', fontSize: '0.8rem', marginTop: '0.2rem' }}>
+            ID: {v.activity_id}
           </div>
           {v.completed && v.arrival_home_base_time && (
             <div style={{ color: '#334155', fontSize: '0.85rem', marginTop: '0.3rem', fontWeight: 600 }}>
