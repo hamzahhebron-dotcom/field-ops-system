@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '../../../lib/supabase'
+import { formatTimeInRegion, regionLabel } from '../../../lib/regions'
 
 export default function VisitReportPage() {
   const params = useParams()
@@ -36,12 +37,6 @@ export default function VisitReportPage() {
     init()
   }, [])
 
-  const formatTime = (iso) => {
-    if (!iso) return '—'
-    const d = new Date(iso)
-    return d.toLocaleDateString() + ' · ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  }
-
   const statusLabel = (status) => {
     const labels = {
       planned: 'Planned',
@@ -68,6 +63,8 @@ export default function VisitReportPage() {
       </main>
     )
   }
+
+  const ft = (iso) => formatTimeInRegion(iso, visit.region)
 
   const timeline = [
     { label: 'Planned departure', time: visit.planned_departure_time },
@@ -144,13 +141,21 @@ export default function VisitReportPage() {
         </h1>
         <p style={{ color: '#666', margin: '0.4rem 0 0' }}>
           📍 {visit.target_location}
+          {visit.region && (
+            <span style={{ color: '#94a3b8' }}> · {regionLabel(visit.region)}</span>
+          )}
         </p>
         <p style={{ margin: '0.6rem 0 0', fontSize: '0.95rem' }}>
           <strong>Status:</strong> {visit.completed ? '✔️ Completed' : statusLabel(visit.current_status)}
           {visit.archived ? ' · 📦 Archived' : ''}
         </p>
+        {visit.region && (
+          <p style={{ margin: '0.3rem 0 0', fontSize: '0.85rem', color: '#94a3b8' }}>
+            All times shown in local time for {regionLabel(visit.region)}
+          </p>
+        )}
         <p style={{ margin: '0.3rem 0 0', fontSize: '0.85rem', color: '#94a3b8' }}>
-          Report generated: {formatTime(new Date().toISOString())}
+          Report generated: {ft(new Date().toISOString())}
         </p>
       </div>
 
@@ -171,7 +176,7 @@ export default function VisitReportPage() {
                   {t.label}
                 </td>
                 <td style={{ padding: '0.5rem 0', textAlign: 'right', color: t.time ? '#0f172a' : '#cbd5e1' }}>
-                  {formatTime(t.time)}
+                  {ft(t.time)}
                 </td>
               </tr>
             ))}
@@ -218,7 +223,7 @@ export default function VisitReportPage() {
                   #{i + 1}
                 </span>
                 <span style={{ color: '#94a3b8', fontSize: '0.85rem' }}>
-                  {formatTime(u.created_at)}
+                  {ft(u.created_at)}
                 </span>
               </div>
 
