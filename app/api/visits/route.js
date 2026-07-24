@@ -28,7 +28,7 @@ export async function POST(request) {
   }
 }
 
-// Get all visits (each with its 2 latest updates)
+// Get all visits (each with its 2 latest updates, including flags)
 export async function GET() {
   try {
     const { data, error } = await supabaseAdmin
@@ -42,7 +42,7 @@ export async function GET() {
 
     const { data: allUpdates } = await supabaseAdmin
       .from('visit_updates')
-      .select('id, visit_id, raw_text, cleaned_readable_update, created_at')
+      .select('id, visit_id, raw_text, cleaned_readable_update, created_at, security_issue, delay_flag, access_denied, data_quality_issue, needs_human_review')
       .order('created_at', { ascending: false })
 
     const visits = data.map(v => {
