@@ -35,7 +35,7 @@ const STATUS_EVENTS = {
 }
 
 async function parseWithAI(rawText) {
-  const systemPrompt = `You are a field operations update parser. You receive free-text updates from field enumerators in English or Arabic. You must return ONLY valid JSON, no other text, no markdown, no code fences.
+  const systemPrompt = `You are a field operations update parser for a humanitarian monitoring team. You receive free-text updates about field enumerators, in English or Arabic. You must return ONLY valid JSON, no other text, no markdown, no code fences.
 
 The JSON must have exactly this structure:
 {
@@ -51,14 +51,35 @@ The JSON must have exactly this structure:
   "needsHumanReview": true or false
 }
 
-FLAG DEFINITIONS:
-- securityIssue: any security concern — incidents, threats, detention, shooting, closures for security reasons, checkpoint trouble beyond routine waiting.
-- delayFlag: the enumerator is delayed or running behind schedule.
-- accessDenied: the enumerator was refused entry, turned away, the site was closed, or permission was denied — the visit could not proceed as planned.
-- dataQualityIssue: data collection was incomplete or compromised — respondents unavailable, not all beneficiaries reached, tools could not be applied, sampling failed.
+FLAG DEFINITIONS — these concern the SAFETY and WORK of the field enumerator:
+
+securityIssue = true when there is ANY concern for the enumerator's safety or whereabouts:
+- Security incidents, threats, shooting, shelling, detention, arrest
+- Checkpoint trouble beyond routine waiting
+- LOSS OF CONTACT: the enumerator is unreachable, not responding, silent, missing, or has not checked in for an extended period — this is ALWAYS a security issue, never a data quality issue
+- Evacuations, closures for security reasons, nearby hostilities
+
+delayFlag = true when the enumerator or the visit is running behind schedule (traffic, waiting, late start, prolonged stops).
+
+accessDenied = true when the enumerator was refused entry, turned away, the site was closed, or permission was denied — the visit could not proceed as planned.
+
+dataQualityIssue = true ONLY for problems with the collected data itself:
+- Respondents unavailable or refusing interviews
+- Not all beneficiaries reached, sampling incomplete
+- Tools could not be applied, forms incomplete
+This flag is about THE DATA, never about the enumerator's safety or reachability.
+
+EXAMPLES:
+- "Enumerator hasn't responded for 3 hours" → securityIssue: true, riskLevel: "medium" or higher, dataQualityIssue: false
+- "We lost contact with Yaser" → securityIssue: true
+- "Only reached 60% of beneficiaries" → dataQualityIssue: true, securityIssue: false
+- "Turned away at the gate by authorities" → accessDenied: true
+- "Stuck in traffic, 30 min late" → delayFlag: true
+- "Shooting heard near the site, team sheltering" → securityIssue: true, riskLevel: "high"
 
 STRICT RULES:
 - Do NOT invent information that is not in the text. Flags are false unless the text clearly indicates them.
+- Multiple flags can be true at once when the text supports them.
 - Only set "status" if the text CLEARLY states a movement or stage change. Otherwise use "unknown".
 - NEVER set status to any completion or return state based on future plans or intentions.
 - If the text is unclear or you are not confident, set needsHumanReview to true and confidence below 0.5.
@@ -186,7 +207,6 @@ export async function POST(request) {
       }
       results.push(commentRow)
 
-      // Comment only updates the visit's latest text and (carefully) its status
       const visitUpdate = {
         latest_update: ai && ai.cleanedReadableUpdate ? ai.cleanedReadableUpdate : body.raw_text,
       }
