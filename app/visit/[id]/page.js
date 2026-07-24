@@ -53,6 +53,24 @@ export default function VisitReportPage() {
     return labels[status] || status
   }
 
+  // Icon for each log entry based on its content
+  const entryIcon = (u) => {
+    if (!u.raw_text || !u.raw_text.startsWith('[BUTTON]')) {
+      if (u.security_issue) return '🔴'
+      if (u.delay_flag) return '⚠️'
+      return '💬'
+    }
+    if (u.raw_text.includes('Departed to location')) return '🚗'
+    if (u.raw_text.includes('Arrived at location')) return '📍'
+    if (u.raw_text.includes('collection started')) return '📋'
+    if (u.raw_text.includes('collection finished')) return '✅'
+    if (u.raw_text.includes('Departing to home base')) return '🏠'
+    if (u.raw_text.includes('home base — visit complete')) return '🎯'
+    return '🔘'
+  }
+
+  const isButtonEntry = (u) => u.raw_text && u.raw_text.startsWith('[BUTTON]')
+
   if (loading) return <p style={{ padding: '2rem' }}>Loading...</p>
 
   if (!visit) {
@@ -66,12 +84,27 @@ export default function VisitReportPage() {
 
   const ft = (iso) => formatTimeInRegion(iso, visit.region)
 
-  const timeline = [
-    { label: 'Planned departure', time: visit.planned_departure_time },
-    { label: 'Actual departure', time: visit.actual_departure_time },
-    { label: 'Arrived at destination', time: visit.arrival_time_at_destination },
-    { label: 'Departed destination', time: visit.departure_from_destination },
-    { label: 'Arrived at home base', time: visit.arrival_home_base_time },
+  // Build one unified chronological log:
+  // visit creation first, then every update in order
+  const logEntries = [
+    {
+      id: 'created',
+      icon: '🗓',
+      time: visit.created_at,
+      text: 'Visit created',
+      isSystem: true,
+    },
+    ...updates.map(u => ({
+      id: u.id,
+      icon: entryIcon(u),
+      time: u.created_at,
+      text: u.cleaned_readable_update || u.raw_text,
+      original: !isButtonEntry(u) && u.raw_text !== u.cleaned_readable_update ? u.raw_text : null,
+      security: u.security_issue,
+      delay: u.delay_flag,
+      review: u.needs_human_review,
+      isSystem: isButtonEntry(u),
+    })),
   ]
 
   return (
@@ -118,7 +151,7 @@ export default function VisitReportPage() {
         </button>
       </div>
 
-      {/* Report header */}
+      {/* Visit info */}
       <div style={{
         background: 'white',
         padding: '1.5rem',
@@ -146,45 +179,20 @@ export default function VisitReportPage() {
           )}
         </p>
         <p style={{ margin: '0.6rem 0 0', fontSize: '0.95rem' }}>
+          <strong>Planned start:</strong> {ft(visit.planned_departure_time)}
+        </p>
+        <p style={{ margin: '0.3rem 0 0', fontSize: '0.95rem' }}>
           <strong>Status:</strong> {visit.completed ? '✔️ Completed' : statusLabel(visit.current_status)}
           {visit.archived ? ' · 📦 Archived' : ''}
         </p>
         {visit.region && (
-          <p style={{ margin: '0.3rem 0 0', fontSize: '0.85rem', color: '#94a3b8' }}>
-            All times shown in local time for {regionLabel(visit.region)}
+          <p style={{ margin: '0.6rem 0 0', fontSize: '0.85rem', color: '#94a3b8' }}>
+            All times shown in local time · {regionLabel(visit.region)}
           </p>
         )}
-        <p style={{ margin: '0.3rem 0 0', fontSize: '0.85rem', color: '#94a3b8' }}>
-          Report generated: {ft(new Date().toISOString())}
-        </p>
       </div>
 
-      {/* Movement timeline */}
-      <div style={{
-        background: 'white',
-        padding: '1.5rem',
-        borderRadius: '10px',
-        boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
-        marginBottom: '1.5rem'
-      }}>
-        <h2 style={{ marginTop: 0, fontSize: '1.1rem' }}>🕐 Movement Timeline</h2>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
-          <tbody>
-            {timeline.map((t) => (
-              <tr key={t.label} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                <td style={{ padding: '0.5rem 0', color: '#475569', fontWeight: 600 }}>
-                  {t.label}
-                </td>
-                <td style={{ padding: '0.5rem 0', textAlign: 'right', color: t.time ? '#0f172a' : '#cbd5e1' }}>
-                  {ft(t.time)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Update log */}
+      {/* Activity Log */}
       <div style={{
         background: 'white',
         padding: '1.5rem',
@@ -192,74 +200,90 @@ export default function VisitReportPage() {
         boxShadow: '0 1px 4px rgba(0,0,0,0.08)'
       }}>
         <h2 style={{ marginTop: 0, fontSize: '1.1rem' }}>
-          📜 Update Log ({updates.length})
+          📜 Activity Log
         </h2>
 
-        {updates.length === 0 && (
-          <p style={{ color: '#666' }}>No updates recorded for this visit.</p>
-        )}
-
-        <div style={{ display: 'grid', gap: '0.75rem' }}>
-          {updates.map((u, i) => (
-            <div key={u.id} style={{
-              padding: '0.75rem 1rem',
-              borderRadius: '8px',
-              background: '#f8fafc',
-              borderLeft: u.security_issue
-                ? '4px solid #dc2626'
-                : u.delay_flag
-                  ? '4px solid #f59e0b'
-                  : '4px solid #e2e8f0'
+        <div>
+          {logEntries.map((entry, i) => (
+            <div key={entry.id} style={{
+              display: 'flex',
+              gap: '0.9rem',
+              paddingBottom: i === logEntries.length - 1 ? 0 : '1.1rem',
+              position: 'relative'
             }}>
+              {/* Timeline line */}
+              {i !== logEntries.length - 1 && (
+                <div style={{
+                  position: 'absolute',
+                  left: '0.72rem',
+                  top: '1.6rem',
+                  bottom: 0,
+                  width: '2px',
+                  background: '#e2e8f0'
+                }} />
+              )}
+
+              {/* Icon */}
               <div style={{
+                width: '1.5rem',
+                height: '1.5rem',
+                flexShrink: 0,
                 display: 'flex',
-                justifyContent: 'space-between',
                 alignItems: 'center',
-                marginBottom: '0.4rem',
-                flexWrap: 'wrap',
-                gap: '0.3rem'
+                justifyContent: 'center',
+                fontSize: '0.95rem',
+                zIndex: 1,
+                background: 'white'
               }}>
-                <span style={{ fontWeight: 700, fontSize: '0.85rem', color: '#475569' }}>
-                  #{i + 1}
-                </span>
-                <span style={{ color: '#94a3b8', fontSize: '0.85rem' }}>
-                  {ft(u.created_at)}
-                </span>
+                {entry.icon}
               </div>
 
-              <p style={{ margin: 0, fontSize: '0.95rem' }}>
-                {u.cleaned_readable_update || u.raw_text}
-              </p>
-
-              {u.raw_text && u.cleaned_readable_update && u.raw_text !== u.cleaned_readable_update && !u.raw_text.startsWith('[BUTTON]') && (
-                <p style={{
-                  margin: '0.4rem 0 0',
+              {/* Content */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{
                   fontSize: '0.8rem',
-                  color: '#94a3b8'
+                  color: '#94a3b8',
+                  fontWeight: 600,
+                  marginBottom: '0.15rem'
                 }}>
-                  Original: "{u.raw_text}"
-                </p>
-              )}
-
-              {(u.security_issue || u.delay_flag || u.needs_human_review) && (
-                <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
-                  {u.security_issue && (
-                    <span style={{ background: '#fee2e2', color: '#991b1b', padding: '0.15rem 0.5rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600 }}>
-                      🔴 Security
-                    </span>
-                  )}
-                  {u.delay_flag && (
-                    <span style={{ background: '#fef3c7', color: '#92400e', padding: '0.15rem 0.5rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600 }}>
-                      ⚠️ Delay
-                    </span>
-                  )}
-                  {u.needs_human_review && (
-                    <span style={{ background: '#e0e7ff', color: '#3730a3', padding: '0.15rem 0.5rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600 }}>
-                      👀 Needs Review
-                    </span>
-                  )}
+                  {ft(entry.time)}
                 </div>
-              )}
+                <div style={{
+                  fontSize: '0.95rem',
+                  color: entry.isSystem ? '#475569' : '#0f172a',
+                  fontWeight: entry.isSystem ? 600 : 400
+                }}>
+                  {entry.text}
+                </div>
+                {entry.original && (
+                  <div style={{
+                    fontSize: '0.8rem',
+                    color: '#94a3b8',
+                    marginTop: '0.2rem'
+                  }}>
+                    Original: "{entry.original}"
+                  </div>
+                )}
+                {(entry.security || entry.delay || entry.review) && (
+                  <div style={{ marginTop: '0.35rem', display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                    {entry.security && (
+                      <span style={{ background: '#fee2e2', color: '#991b1b', padding: '0.1rem 0.5rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600 }}>
+                        Security
+                      </span>
+                    )}
+                    {entry.delay && (
+                      <span style={{ background: '#fef3c7', color: '#92400e', padding: '0.1rem 0.5rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600 }}>
+                        Delay
+                      </span>
+                    )}
+                    {entry.review && (
+                      <span style={{ background: '#e0e7ff', color: '#3730a3', padding: '0.1rem 0.5rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600 }}>
+                        Needs Review
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           ))}
         </div>
