@@ -3,9 +3,22 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useRouter } from 'next/navigation'
 
+// Usernames are stored internally as username@fieldops.local
+const toEmail = (username) => {
+  const u = username.trim().toLowerCase()
+  return u.includes('@') ? u : u + '@fieldops.local'
+}
+
+// Show plain usernames in the list (hide the internal domain)
+const displayName = (email) => {
+  return email.endsWith('@fieldops.local')
+    ? email.replace('@fieldops.local', '')
+    : email
+}
+
 export default function AdminPage() {
   const [users, setUsers] = useState([])
-  const [newEmail, setNewEmail] = useState('')
+  const [newUsername, setNewUsername] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [newRole, setNewRole] = useState('viewer')
   const [message, setMessage] = useState('')
@@ -46,8 +59,12 @@ export default function AdminPage() {
   }, [])
 
   const handleAddUser = async () => {
-    if (!newEmail || !newPassword) {
-      setMessage('❌ Enter email and password')
+    if (!newUsername || !newPassword) {
+      setMessage('❌ Enter username and password')
+      return
+    }
+    if (!newUsername.includes('@') && !/^[a-z0-9._-]+$/i.test(newUsername.trim())) {
+      setMessage('❌ Username can only contain letters, numbers, dots, dashes, underscores')
       return
     }
     setLoading(true)
@@ -61,7 +78,7 @@ export default function AdminPage() {
         'Authorization': `Bearer ${token}`,
       },
       body: JSON.stringify({
-        email: newEmail,
+        email: toEmail(newUsername),
         password: newPassword,
         role: newRole,
       }),
@@ -71,8 +88,8 @@ export default function AdminPage() {
     if (data.error) {
       setMessage('❌ ' + data.error)
     } else {
-      setMessage('✅ User added: ' + newEmail)
-      setNewEmail('')
+      setMessage('✅ User added: ' + newUsername.trim().toLowerCase())
+      setNewUsername('')
       setNewPassword('')
       setNewRole('viewer')
       loadUsers()
@@ -97,13 +114,13 @@ export default function AdminPage() {
     if (data.error) {
       setMessage('❌ ' + data.error)
     } else {
-      setMessage(`✅ ${email} is now ${nextRole}`)
+      setMessage(`✅ ${displayName(email)} is now ${nextRole}`)
       loadUsers()
     }
   }
 
   const handleDelete = async (userId, email) => {
-    if (!confirm(`Remove ${email}? They will no longer be able to log in.`)) return
+    if (!confirm(`Remove ${displayName(email)}? They will no longer be able to log in.`)) return
 
     const token = await getToken()
     const res = await fetch('/api/admin', {
@@ -119,7 +136,7 @@ export default function AdminPage() {
     if (data.error) {
       setMessage('❌ ' + data.error)
     } else {
-      setMessage('✅ Removed ' + email)
+      setMessage('✅ Removed ' + displayName(email))
       loadUsers()
     }
   }
@@ -170,11 +187,13 @@ export default function AdminPage() {
         <h2 style={{ marginTop: 0, fontSize: '1.1rem' }}>➕ Add New User</h2>
         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
           <input
-            type="email"
-            placeholder="Email"
-            value={newEmail}
-            onChange={(e) => setNewEmail(e.target.value)}
-            style={{ ...inputStyle, flex: '2', minWidth: '180px' }}
+            type="text"
+            placeholder="Username"
+            value={newUsername}
+            onChange={(e) => setNewUsername(e.target.value)}
+            autoCapitalize="none"
+            autoCorrect="off"
+            style={{ ...inputStyle, flex: '2', minWidth: '160px' }}
           />
           <input
             type="text"
@@ -207,6 +226,9 @@ export default function AdminPage() {
             {loading ? 'Adding...' : 'Add'}
           </button>
         </div>
+        <p style={{ margin: '0.6rem 0 0', fontSize: '0.8rem', color: '#94a3b8' }}>
+          Usernames: letters, numbers, dots, dashes, underscores. No spaces.
+        </p>
       </div>
 
       {message && (
@@ -228,7 +250,7 @@ export default function AdminPage() {
             gap: '0.5rem'
           }}>
             <div>
-              <div style={{ fontWeight: 600 }}>{u.email}</div>
+              <div style={{ fontWeight: 600 }}>{displayName(u.email)}</div>
               <span style={{
                 display: 'inline-block',
                 marginTop: '0.3rem',
