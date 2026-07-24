@@ -3,28 +3,34 @@ import { useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useRouter } from 'next/navigation'
 
+// Usernames are stored internally as username@fieldops.local
+const toEmail = (username) => {
+  const u = username.trim().toLowerCase()
+  return u.includes('@') ? u : u + '@fieldops.local'
+}
+
 export default function LoginPage() {
-  const [email, setEmail] = useState('')
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState('')
   const router = useRouter()
 
   const handleLogin = async (mode) => {
-    if (!email || !password) {
-      setError('Please enter email and password')
+    if (!username || !password) {
+      setError('Please enter username and password')
       return
     }
     setLoading(mode)
     setError('')
 
     const { error } = await supabase.auth.signInWithPassword({
-      email,
+      email: toEmail(username),
       password,
     })
 
     if (error) {
-      setError(error.message)
+      setError(error.message.replace('email', 'username').replace('Email', 'Username'))
       setLoading('')
     } else {
       router.push(mode === 'viewer' ? '/view' : '/dashboard')
@@ -65,12 +71,14 @@ export default function LoginPage() {
 
         <div style={{ marginBottom: '1rem' }}>
           <label style={{ display: 'block', marginBottom: '0.4rem', fontWeight: 500 }}>
-            Email
+            Username
           </label>
           <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            type="text"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            autoCapitalize="none"
+            autoCorrect="off"
             required
             style={inputStyle}
           />
