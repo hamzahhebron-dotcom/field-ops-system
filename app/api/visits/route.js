@@ -11,6 +11,7 @@ export async function POST(request) {
       .insert({
         activity_id: body.activity_id,
         enumerator_name: body.enumerator_name,
+        region: body.region,
         target_location: body.target_location,
         planned_departure_time: body.planned_departure_time,
       })
