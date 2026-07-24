@@ -2,10 +2,12 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useRouter } from 'next/navigation'
+import { REGIONS } from '../../lib/regions'
 
 export default function CreateVisitPage() {
   const [activityId, setActivityId] = useState('')
   const [enumeratorName, setEnumeratorName] = useState('')
+  const [region, setRegion] = useState('')
   const [targetLocation, setTargetLocation] = useState('')
   const [plannedDeparture, setPlannedDeparture] = useState('')
   const [message, setMessage] = useState('')
@@ -14,7 +16,7 @@ export default function CreateVisitPage() {
 
   useEffect(() => {
     const checkAuth = async () => {
-    const { data: { session } } = await supabase.auth.getSession()
+      const { data: { session } } = await supabase.auth.getSession()
       if (!session) {
         router.push('/login')
         return
@@ -31,8 +33,12 @@ export default function CreateVisitPage() {
     checkAuth()
   }, [])
 
-  const handleSubmit = async (e) => {
-    e.preventDefault()
+  const handleSubmit = async () => {
+    if (!activityId || !enumeratorName || !region || !targetLocation || !plannedDeparture) {
+      setMessage('❌ Please fill in all fields')
+      return
+    }
+
     setLoading(true)
     setMessage('')
 
@@ -42,6 +48,7 @@ export default function CreateVisitPage() {
       body: JSON.stringify({
         activity_id: activityId,
         enumerator_name: enumeratorName,
+        region: region,
         target_location: targetLocation,
         planned_departure_time: plannedDeparture,
       }),
@@ -55,6 +62,7 @@ export default function CreateVisitPage() {
       setMessage('✅ Visit created successfully!')
       setActivityId('')
       setEnumeratorName('')
+      setRegion('')
       setTargetLocation('')
       setPlannedDeparture('')
     }
@@ -93,7 +101,7 @@ export default function CreateVisitPage() {
         width: '100%',
         maxWidth: '450px'
       }}>
-     <a href="/dashboard" style={{
+        <a href="/dashboard" style={{
           display: 'inline-block',
           marginBottom: '1rem',
           color: '#1a56db',
@@ -103,6 +111,7 @@ export default function CreateVisitPage() {
         }}>
           ← Back to Dashboard
         </a>
+
         <h1 style={{ marginBottom: '0.25rem', fontSize: '1.4rem' }}>
           📋 Create New Visit
         </h1>
@@ -110,78 +119,89 @@ export default function CreateVisitPage() {
           Coordinator — plan a new field visit
         </p>
 
-        <form onSubmit={handleSubmit}>
-          <div style={{ marginBottom: '1rem' }}>
-            <label style={labelStyle}>Activity ID</label>
-            <input
-              type="text"
-              value={activityId}
-              onChange={(e) => setActivityId(e.target.value)}
-              placeholder="e.g. GZ-204"
-              required
-              style={inputStyle}
-            />
-          </div>
+        <div style={{ marginBottom: '1rem' }}>
+          <label style={labelStyle}>Activity ID</label>
+          <input
+            type="text"
+            value={activityId}
+            onChange={(e) => setActivityId(e.target.value)}
+            placeholder="e.g. GZ-204"
+            style={inputStyle}
+          />
+        </div>
 
-          <div style={{ marginBottom: '1rem' }}>
-            <label style={labelStyle}>Enumerator Name</label>
-            <input
-              type="text"
-              value={enumeratorName}
-              onChange={(e) => setEnumeratorName(e.target.value)}
-              placeholder="e.g. Ahmad"
-              required
-              style={inputStyle}
-            />
-          </div>
+        <div style={{ marginBottom: '1rem' }}>
+          <label style={labelStyle}>Enumerator Name</label>
+          <input
+            type="text"
+            value={enumeratorName}
+            onChange={(e) => setEnumeratorName(e.target.value)}
+            placeholder="e.g. Ahmad"
+            style={inputStyle}
+          />
+        </div>
 
-          <div style={{ marginBottom: '1rem' }}>
-            <label style={labelStyle}>Target Location</label>
-            <input
-              type="text"
-              value={targetLocation}
-              onChange={(e) => setTargetLocation(e.target.value)}
-              placeholder="e.g. Al-Amal Clinic"
-              required
-              style={inputStyle}
-            />
-          </div>
-
-          <div style={{ marginBottom: '1.5rem' }}>
-            <label style={labelStyle}>Planned Departure Time</label>
-            <input
-              type="datetime-local"
-              value={plannedDeparture}
-              onChange={(e) => setPlannedDeparture(e.target.value)}
-              required
-              style={inputStyle}
-            />
-          </div>
-
-          {message && (
-            <p style={{ marginBottom: '1rem', fontSize: '0.9rem' }}>
-              {message}
-            </p>
-          )}
-
-          <button
-            type="submit"
-            disabled={loading}
-            style={{
-              width: '100%',
-              padding: '0.75rem',
-              background: loading ? '#aaa' : '#1a56db',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              fontSize: '1rem',
-              fontWeight: 600,
-              cursor: loading ? 'not-allowed' : 'pointer'
-            }}
+        <div style={{ marginBottom: '1rem' }}>
+          <label style={labelStyle}>Region</label>
+          <select
+            value={region}
+            onChange={(e) => setRegion(e.target.value)}
+            style={{ ...inputStyle, background: 'white' }}
           >
-            {loading ? 'Creating...' : 'Create Visit'}
-          </button>
-        </form>
+            <option value="">-- Select region --</option>
+            {Object.entries(REGIONS).map(([key, r]) => (
+              <option key={key} value={key}>
+                {r.flag} {r.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div style={{ marginBottom: '1rem' }}>
+          <label style={labelStyle}>Location Details</label>
+          <input
+            type="text"
+            value={targetLocation}
+            onChange={(e) => setTargetLocation(e.target.value)}
+            placeholder="e.g. Al-Amal Clinic, Khan Younis"
+            style={inputStyle}
+          />
+        </div>
+
+        <div style={{ marginBottom: '1.5rem' }}>
+          <label style={labelStyle}>Planned Departure Time</label>
+          <input
+            type="datetime-local"
+            value={plannedDeparture}
+            onChange={(e) => setPlannedDeparture(e.target.value)}
+            style={inputStyle}
+          />
+        </div>
+
+        {message && (
+          <p style={{ marginBottom: '1rem', fontSize: '0.9rem' }}>
+            {message}
+          </p>
+        )}
+
+        <button
+          type="button"
+          onClick={handleSubmit}
+          disabled={loading}
+          style={{
+            width: '100%',
+            padding: '0.75rem',
+            background: loading ? '#aaa' : '#1a56db',
+            color: 'white',
+            border: 'none',
+            borderRadius: '8px',
+            fontSize: '1rem',
+            fontWeight: 600,
+            cursor: loading ? 'not-allowed' : 'pointer'
+          }}
+        >
+          {loading ? 'Creating...' : 'Create Visit'}
+        </button>
       </div>
     </main>
   )
