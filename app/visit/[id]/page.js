@@ -53,11 +53,12 @@ export default function VisitReportPage() {
     return labels[status] || status
   }
 
-  // Icon for each log entry based on its content
   const entryIcon = (u) => {
     if (!u.raw_text || !u.raw_text.startsWith('[BUTTON]')) {
       if (u.security_issue) return '🔴'
+      if (u.access_denied) return '🚧'
       if (u.delay_flag) return '⚠️'
+      if (u.data_quality_issue) return '📉'
       return '💬'
     }
     if (u.raw_text.includes('Departed to location')) return '🚗'
@@ -84,8 +85,6 @@ export default function VisitReportPage() {
 
   const ft = (iso) => formatTimeInRegion(iso, visit.region)
 
-  // Build one unified chronological log:
-  // visit creation first, then every update in order
   const logEntries = [
     {
       id: 'created',
@@ -102,6 +101,8 @@ export default function VisitReportPage() {
       original: !isButtonEntry(u) && u.raw_text !== u.cleaned_readable_update ? u.raw_text : null,
       security: u.security_issue,
       delay: u.delay_flag,
+      access: u.access_denied,
+      quality: u.data_quality_issue,
       review: u.needs_human_review,
       isSystem: isButtonEntry(u),
     })),
@@ -151,7 +152,7 @@ export default function VisitReportPage() {
         </button>
       </div>
 
-      {/* Visit info */}
+      {/* Visit info — enumerator first */}
       <div style={{
         background: 'white',
         padding: '1.5rem',
@@ -170,13 +171,16 @@ export default function VisitReportPage() {
           Field Visit Report
         </p>
         <h1 style={{ margin: 0, fontSize: '1.4rem' }}>
-          {visit.activity_id} — {visit.enumerator_name}
+          👤 {visit.enumerator_name}
         </h1>
-        <p style={{ color: '#666', margin: '0.4rem 0 0' }}>
+        <p style={{ color: '#475569', margin: '0.4rem 0 0', fontWeight: 600 }}>
           📍 {visit.target_location}
           {visit.region && (
-            <span style={{ color: '#94a3b8' }}> · {regionLabel(visit.region)}</span>
+            <span style={{ fontWeight: 500, color: '#64748b' }}> — {regionLabel(visit.region)}</span>
           )}
+        </p>
+        <p style={{ color: '#94a3b8', margin: '0.3rem 0 0', fontSize: '0.85rem' }}>
+          ID: {visit.activity_id}
         </p>
         <p style={{ margin: '0.6rem 0 0', fontSize: '0.95rem' }}>
           <strong>Planned start:</strong> {ft(visit.planned_departure_time)}
@@ -211,7 +215,6 @@ export default function VisitReportPage() {
               paddingBottom: i === logEntries.length - 1 ? 0 : '1.1rem',
               position: 'relative'
             }}>
-              {/* Timeline line */}
               {i !== logEntries.length - 1 && (
                 <div style={{
                   position: 'absolute',
@@ -223,7 +226,6 @@ export default function VisitReportPage() {
                 }} />
               )}
 
-              {/* Icon */}
               <div style={{
                 width: '1.5rem',
                 height: '1.5rem',
@@ -238,7 +240,6 @@ export default function VisitReportPage() {
                 {entry.icon}
               </div>
 
-              {/* Content */}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{
                   fontSize: '0.8rem',
@@ -264,21 +265,31 @@ export default function VisitReportPage() {
                     Original: "{entry.original}"
                   </div>
                 )}
-                {(entry.security || entry.delay || entry.review) && (
+                {(entry.security || entry.delay || entry.access || entry.quality || entry.review) && (
                   <div style={{ marginTop: '0.35rem', display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
                     {entry.security && (
                       <span style={{ background: '#fee2e2', color: '#991b1b', padding: '0.1rem 0.5rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600 }}>
-                        Security
+                        🔴 Security
                       </span>
                     )}
                     {entry.delay && (
                       <span style={{ background: '#fef3c7', color: '#92400e', padding: '0.1rem 0.5rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600 }}>
-                        Delay
+                        ⚠️ Delay
+                      </span>
+                    )}
+                    {entry.access && (
+                      <span style={{ background: '#f3e8ff', color: '#6b21a8', padding: '0.1rem 0.5rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600 }}>
+                        🚧 Access Denied
+                      </span>
+                    )}
+                    {entry.quality && (
+                      <span style={{ background: '#e0f2fe', color: '#075985', padding: '0.1rem 0.5rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600 }}>
+                        📉 Data Quality
                       </span>
                     )}
                     {entry.review && (
                       <span style={{ background: '#e0e7ff', color: '#3730a3', padding: '0.1rem 0.5rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600 }}>
-                        Needs Review
+                        👀 Needs Review
                       </span>
                     )}
                   </div>
