@@ -31,11 +31,11 @@ export default function FlaggedPage() {
       if (vData.visits) setVisits(vData.visits)
 
       if (uData.updates && vData.visits) {
-        // Only events from ACTIVE visits — not completed, not archived
-        const activeIds = vData.visits
-          .filter(v => !v.archived && !v.completed)
+        // Events from active AND completed visits — archived excluded
+        const visibleIds = vData.visits
+          .filter(v => !v.archived)
           .map(v => v.id)
-        setUpdates(uData.updates.filter(u => activeIds.includes(u.visit_id)))
+        setUpdates(uData.updates.filter(u => visibleIds.includes(u.visit_id)))
       }
       setLoading(false)
     }
@@ -98,7 +98,7 @@ export default function FlaggedPage() {
       </div>
 
       <p style={{ color: '#94a3b8', fontSize: '0.85rem', marginTop: '-0.75rem', marginBottom: '1.25rem' }}>
-        Showing flagged events from active visits only. Flags from completed and archived visits remain in each visit's own log.
+        Showing flagged events from active and completed visits. Archived visits are excluded — their flags remain in each visit's own log.
       </p>
 
       {/* Filter buttons */}
@@ -124,7 +124,7 @@ export default function FlaggedPage() {
       </div>
 
       {filtered.length === 0 && (
-        <p style={{ color: '#666' }}>No flagged events on active visits. All clear. ✅</p>
+        <p style={{ color: '#666' }}>No flagged events. All clear. ✅</p>
       )}
 
       <div style={{ display: 'grid', gap: '1rem' }}>
@@ -143,24 +143,45 @@ export default function FlaggedPage() {
                   ? '5px solid #9333ea'
                   : u.delay_flag
                     ? '5px solid #f59e0b'
-                    : '5px solid #0ea5e9'
+                    : '5px solid #0ea5e9',
+              opacity: v.completed ? 0.95 : 1
             }}>
               <div style={{
-                fontSize: '0.9rem',
-                color: '#334155',
-                fontWeight: 700,
-                marginBottom: '0.2rem'
-              }}>
-                👤 {v.enumerator_name}
-              </div>
-              <div style={{
-                fontSize: '0.85rem',
-                color: '#64748b',
-                fontWeight: 600,
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'flex-start',
+                flexWrap: 'wrap',
+                gap: '0.5rem',
                 marginBottom: '0.4rem'
               }}>
-                📍 {v.target_location}
-                {v.region ? ' — ' + regionLabel(v.region) : ''}
+                <div>
+                  <div style={{
+                    fontSize: '0.9rem',
+                    color: '#334155',
+                    fontWeight: 700
+                  }}>
+                    👤 {v.enumerator_name}
+                  </div>
+                  <div style={{
+                    fontSize: '0.85rem',
+                    color: '#64748b',
+                    fontWeight: 600,
+                    marginTop: '0.15rem'
+                  }}>
+                    📍 {v.target_location}
+                    {v.region ? ' — ' + regionLabel(v.region) : ''}
+                  </div>
+                </div>
+                <span style={{
+                  background: v.completed ? '#334155' : '#16a34a',
+                  color: 'white',
+                  padding: '0.2rem 0.65rem',
+                  borderRadius: '999px',
+                  fontSize: '0.75rem',
+                  fontWeight: 600
+                }}>
+                  {v.completed ? '✔️ Completed Visit' : '🟢 Active Visit'}
+                </span>
               </div>
 
               <div style={{
