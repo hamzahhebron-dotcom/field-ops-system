@@ -28,8 +28,15 @@ export default function FlaggedPage() {
       const uData = await uRes.json()
       const vData = await vRes.json()
 
-      if (uData.updates) setUpdates(uData.updates)
       if (vData.visits) setVisits(vData.visits)
+
+      if (uData.updates && vData.visits) {
+        // Only events from ACTIVE visits — not completed, not archived
+        const activeIds = vData.visits
+          .filter(v => !v.archived && !v.completed)
+          .map(v => v.id)
+        setUpdates(uData.updates.filter(u => activeIds.includes(u.visit_id)))
+      }
       setLoading(false)
     }
     init()
@@ -90,6 +97,10 @@ export default function FlaggedPage() {
         </div>
       </div>
 
+      <p style={{ color: '#94a3b8', fontSize: '0.85rem', marginTop: '-0.75rem', marginBottom: '1.25rem' }}>
+        Showing flagged events from active visits only. Flags from completed and archived visits remain in each visit's own log.
+      </p>
+
       {/* Filter buttons */}
       <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1.5rem' }}>
         {FLAG_TYPES.map(f => (
@@ -113,12 +124,13 @@ export default function FlaggedPage() {
       </div>
 
       {filtered.length === 0 && (
-        <p style={{ color: '#666' }}>No flagged events. All clear. ✅</p>
+        <p style={{ color: '#666' }}>No flagged events on active visits. All clear. ✅</p>
       )}
 
       <div style={{ display: 'grid', gap: '1rem' }}>
         {filtered.map((u) => {
           const v = visitById(u.visit_id)
+          if (!v) return null
           return (
             <div key={u.id} style={{
               background: 'white',
@@ -133,35 +145,37 @@ export default function FlaggedPage() {
                     ? '5px solid #f59e0b'
                     : '5px solid #0ea5e9'
             }}>
-              {/* Which visit this came from */}
+              <div style={{
+                fontSize: '0.9rem',
+                color: '#334155',
+                fontWeight: 700,
+                marginBottom: '0.2rem'
+              }}>
+                👤 {v.enumerator_name}
+              </div>
               <div style={{
                 fontSize: '0.85rem',
                 color: '#64748b',
                 fontWeight: 600,
                 marginBottom: '0.4rem'
               }}>
-                {v
-                  ? `${v.activity_id} — ${v.enumerator_name} · 📍 ${v.target_location}`
-                  : 'Visit deleted'}
+                📍 {v.target_location}
+                {v.region ? ' — ' + regionLabel(v.region) : ''}
               </div>
 
-              {/* Timestamp */}
               <div style={{
                 fontSize: '0.8rem',
                 color: '#94a3b8',
                 fontWeight: 600,
                 marginBottom: '0.4rem'
               }}>
-                🕐 {formatTimeInRegion(u.created_at, v ? v.region : null)}
-                {v && v.region ? ' · ' + regionLabel(v.region) : ''}
+                🕐 {formatTimeInRegion(u.event_time || u.created_at, v.region)}
               </div>
 
-              {/* The flagged update itself */}
               <p style={{ margin: '0 0 0.5rem', fontSize: '0.95rem' }}>
                 {u.cleaned_readable_update || u.raw_text}
               </p>
 
-              {/* Flags on this event */}
               <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
                 {u.security_issue && (
                   <span style={{ background: '#fee2e2', color: '#991b1b', padding: '0.15rem 0.5rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600 }}>
@@ -185,16 +199,14 @@ export default function FlaggedPage() {
                 )}
               </div>
 
-              {v && (
-                <a href={'/visit/' + v.id} style={{
-                  color: '#1a56db',
-                  textDecoration: 'none',
-                  fontWeight: 600,
-                  fontSize: '0.85rem'
-                }}>
-                  📜 View full visit log →
-                </a>
-              )}
+              <a href={'/visit/' + v.id} style={{
+                color: '#1a56db',
+                textDecoration: 'none',
+                fontWeight: 600,
+                fontSize: '0.85rem'
+              }}>
+                📜 View full visit log →
+              </a>
             </div>
           )
         })}
