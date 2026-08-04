@@ -131,12 +131,17 @@ export async function POST(request) {
       )
     }
 
+    // Optional custom event time (when the event actually happened)
+    // Falls back to now if not provided
+    const eventTime = body.event_time
+      ? new Date(body.event_time).toISOString()
+      : new Date().toISOString()
+
     const results = []
 
     // ---- 1. Button event (exact, no AI, never flagged) ----
     if (hasEvent) {
       const event = STATUS_EVENTS[body.status_event]
-      const now = new Date().toISOString()
 
       const { data: eventRow, error: eventError } = await supabaseAdmin
         .from('visit_updates')
@@ -147,6 +152,7 @@ export async function POST(request) {
           cleaned_readable_update: event.label,
           confidence: 1,
           needs_human_review: false,
+          event_time: eventTime,
         })
         .select()
         .single()
@@ -161,7 +167,7 @@ export async function POST(request) {
         latest_update: event.label,
       }
       if (event.time_field) {
-        visitUpdate[event.time_field] = now
+        visitUpdate[event.time_field] = eventTime
       }
       if (body.status_event === 'arrived_at_base') {
         visitUpdate.completed = true
@@ -198,6 +204,7 @@ export async function POST(request) {
           ai_json: ai,
           confidence: ai ? ai.confidence : null,
           needs_human_review: ai ? ai.needsHumanReview : true,
+          event_time: eventTime,
         })
         .select()
         .single()
@@ -261,7 +268,14 @@ export async function GET(request) {
       return NextResponse.json({ error: error.message }, { status: 400 })
     }
 
-    return NextResponse.json({ updates: data })
+    // Sort by when the event actually happened (falls back to submission time)
+    const sorted = (data || []).sort((a, b) => {
+      const ta = new Date(a.event_time || a.created_at).getTime()
+      const tb = new Date(b.event_time || b.created_at).getTime()
+      return ta - tb
+    })
+
+    return NextResponse.json({ updates: sorted })
   } catch (err) {
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
   }
