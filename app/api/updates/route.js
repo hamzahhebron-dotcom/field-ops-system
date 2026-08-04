@@ -28,7 +28,7 @@ const STATUS_EVENTS = {
     time_field: 'departure_from_destination',
   },
   arrived_at_base: {
-    label: 'Arrived at home base — visit complete',
+    label: 'Arrived at home base',
     visit_status: 'completed',
     time_field: 'arrival_home_base_time',
   },
@@ -112,7 +112,7 @@ STRICT RULES:
   return JSON.parse(data.choices[0].message.content)
 }
 
-// Submit a new update (button event, comment, or both)
+// Submit a new update (button event, comment, cancellation, or combination)
 export async function POST(request) {
   try {
     const body = await request.json()
@@ -121,35 +121,91 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Missing visit' }, { status: 400 })
     }
 
+    const isCancellation = body.cancel_visit === true
     const hasEvent = body.status_event && STATUS_EVENTS[body.status_event]
     const hasComment = body.raw_text && body.raw_text.trim().length > 0
 
-    if (!hasEvent && !hasComment) {
+    if (!isCancellation && !hasEvent && !hasComment) {
       return NextResponse.json(
         { error: 'Choose a status button or write a comment' },
         { status: 400 }
       )
     }
 
-    // Optional custom event time (when the event actually happened)
-    // Falls back to now if not provided
     const eventTime = body.event_time
       ? new Date(body.event_time).toISOString()
       : new Date().toISOString()
 
     const results = []
 
+    // ---- 0. Cancellation (closes the visit as Cancelled) ----
+    if (isCancellation) {
+      const reason = (body.cancel_reason || '').trim()
+      if (!reason) {
+        return NextResponse.json(
+          { error: 'A cancellation reason is required' },
+          { status: 400 }
+        )
+      }
+
+      const label = 'Visit cancelled — ' + reason
+
+      const { data: cancelRow, error: cancelError } = await supabaseAdmin
+        .from('visit_updates')
+        .insert({
+          visit_id: body.visit_id,
+          raw_text: '[BUTTON] ' + label,
+          parsed_status: 'cancelled',
+          cleaned_readable_update: label,
+          confidence: 1,
+          needs_human_review: false,
+          event_time: eventTime,
+        })
+        .select()
+        .single()
+
+      if (cancelError) {
+        return NextResponse.json({ error: cancelError.message }, { status: 400 })
+      }
+      results.push(cancelRow)
+
+      await supabaseAdmin
+        .from('visits')
+        .update({
+          completed: true,
+          outcome: 'cancelled',
+          current_status: 'cancelled',
+          latest_update: label,
+          arrival_home_base_time: eventTime,
+        })
+        .eq('id', body.visit_id)
+
+      return NextResponse.json({ updates: results })
+    }
+
     // ---- 1. Button event (exact, no AI, never flagged) ----
     if (hasEvent) {
       const event = STATUS_EVENTS[body.status_event]
+      const isClosing = body.status_event === 'arrived_at_base'
+
+      // For closing: outcome must be 'completed' or 'partial'
+      const outcome = isClosing
+        ? (body.outcome === 'partial' ? 'partial' : 'completed')
+        : null
+
+      const label = isClosing
+        ? (outcome === 'partial'
+            ? 'Arrived at home base — visit partially completed'
+            : 'Arrived at home base — visit completed')
+        : event.label
 
       const { data: eventRow, error: eventError } = await supabaseAdmin
         .from('visit_updates')
         .insert({
           visit_id: body.visit_id,
-          raw_text: '[BUTTON] ' + event.label,
+          raw_text: '[BUTTON] ' + label,
           parsed_status: event.visit_status,
-          cleaned_readable_update: event.label,
+          cleaned_readable_update: label,
           confidence: 1,
           needs_human_review: false,
           event_time: eventTime,
@@ -164,13 +220,14 @@ export async function POST(request) {
 
       const visitUpdate = {
         current_status: event.visit_status,
-        latest_update: event.label,
+        latest_update: label,
       }
       if (event.time_field) {
         visitUpdate[event.time_field] = eventTime
       }
-      if (body.status_event === 'arrived_at_base') {
+      if (isClosing) {
         visitUpdate.completed = true
+        visitUpdate.outcome = outcome
       }
 
       await supabaseAdmin
@@ -268,7 +325,6 @@ export async function GET(request) {
       return NextResponse.json({ error: error.message }, { status: 400 })
     }
 
-    // Sort by when the event actually happened (falls back to submission time)
     const sorted = (data || []).sort((a, b) => {
       const ta = new Date(a.event_time || a.created_at).getTime()
       const tb = new Date(b.event_time || b.created_at).getTime()
