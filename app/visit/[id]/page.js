@@ -46,11 +46,19 @@ export default function VisitReportPage() {
       collection_done: 'Collection Finished',
       returning: 'Returning to Base',
       completed: 'Completed',
+      cancelled: 'Cancelled',
       delayed: 'Delayed',
       issue: 'Issue',
       unknown: 'Unknown',
     }
     return labels[status] || status
+  }
+
+  const outcomeText = (v) => {
+    if (!v.completed) return statusLabel(v.current_status)
+    if (v.outcome === 'cancelled') return '⛔ Cancelled'
+    if (v.outcome === 'partial') return '🟡 Partially Completed'
+    return '✔️ Completed'
   }
 
   const entryIcon = (u) => {
@@ -61,12 +69,14 @@ export default function VisitReportPage() {
       if (u.data_quality_issue) return '📉'
       return '💬'
     }
+    if (u.raw_text.includes('Visit cancelled')) return '⛔'
     if (u.raw_text.includes('Departed to location')) return '🚗'
     if (u.raw_text.includes('Arrived at location')) return '📍'
     if (u.raw_text.includes('collection started')) return '📋'
     if (u.raw_text.includes('collection finished')) return '✅'
     if (u.raw_text.includes('Departing to home base')) return '🏠'
-    if (u.raw_text.includes('home base — visit complete')) return '🎯'
+    if (u.raw_text.includes('partially completed')) return '🟡'
+    if (u.raw_text.includes('visit completed')) return '🎯'
     return '🔘'
   }
 
@@ -185,9 +195,14 @@ export default function VisitReportPage() {
           <strong>Planned start:</strong> {ft(visit.planned_departure_time)}
         </p>
         <p style={{ margin: '0.3rem 0 0', fontSize: '0.95rem' }}>
-          <strong>Status:</strong> {visit.completed ? '✔️ Completed' : statusLabel(visit.current_status)}
+          <strong>{visit.completed ? 'Outcome:' : 'Status:'}</strong> {outcomeText(visit)}
           {visit.archived ? ' · 📦 Archived' : ''}
         </p>
+        {visit.completed && visit.arrival_home_base_time && (
+          <p style={{ margin: '0.3rem 0 0', fontSize: '0.95rem' }}>
+            <strong>Closed:</strong> {ft(visit.arrival_home_base_time)}
+          </p>
+        )}
         {visit.region && (
           <p style={{ margin: '0.6rem 0 0', fontSize: '0.85rem', color: '#94a3b8' }}>
             All times shown in local time · {regionLabel(visit.region)}
