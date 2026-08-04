@@ -26,7 +26,10 @@ export default function Dashboard() {
       setLastRefresh(new Date().toLocaleTimeString())
 
       if (fData.updates) {
-        const visibleIds = vData.visits.filter(v => !v.archived).map(v => v.id)
+        // Flags from active AND completed visits (archived excluded)
+        const visibleIds = vData.visits
+          .filter(v => !v.archived)
+          .map(v => v.id)
         setFlaggedCount(fData.updates.filter(u => visibleIds.includes(u.visit_id)).length)
       }
     }
@@ -85,6 +88,7 @@ export default function Dashboard() {
       collection_done: '#0d9488',
       returning: '#0ea5e9',
       completed: '#334155',
+      cancelled: '#b45309',
       delayed: '#f59e0b',
       issue: '#dc2626',
       unknown: '#94a3b8',
@@ -101,11 +105,20 @@ export default function Dashboard() {
       collection_done: 'Collection Finished',
       returning: 'Returning to Base',
       completed: 'Completed',
+      cancelled: 'Cancelled',
       delayed: 'Delayed',
       issue: 'Issue',
       unknown: 'Unknown',
     }
     return labels[status] || status
+  }
+
+  // Outcome tag for closed visits
+  const outcomeTag = (v) => {
+    if (!v.completed) return null
+    if (v.outcome === 'cancelled') return { label: '⛔ Cancelled', bg: '#b45309' }
+    if (v.outcome === 'partial') return { label: '🟡 Partially Completed', bg: '#ca8a04' }
+    return { label: '✔️ Completed', bg: '#334155' }
   }
 
   const updateFlags = (u) => {
@@ -122,156 +135,159 @@ export default function Dashboard() {
   const visibleVisits = visits.filter(v => !v.archived)
   const plannedVisits = visibleVisits.filter(v => !v.completed && v.current_status === 'planned')
   const activeVisits = visibleVisits.filter(v => !v.completed && v.current_status !== 'planned')
-  const completedVisits = visibleVisits.filter(v => v.completed)
+  const closedVisits = visibleVisits.filter(v => v.completed)
 
   const FILTERS = [
     { key: 'all', label: `All (${visibleVisits.length})` },
     { key: 'planned', label: `🗓 Planned (${plannedVisits.length})` },
     { key: 'active', label: `🟢 Active (${activeVisits.length})` },
-    { key: 'completed', label: `✔️ Completed (${completedVisits.length})` },
+    { key: 'closed', label: `🏁 Closed (${closedVisits.length})` },
   ]
 
   const filteredVisits =
     filter === 'planned' ? plannedVisits :
     filter === 'active' ? activeVisits :
-    filter === 'completed' ? completedVisits :
-    [...plannedVisits, ...activeVisits, ...completedVisits]
+    filter === 'closed' ? closedVisits :
+    [...plannedVisits, ...activeVisits, ...closedVisits]
 
-  const renderCard = (v) => (
-    <div key={v.id} style={{
-      background: 'white',
-      borderRadius: '10px',
-      padding: '1.25rem',
-      boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
-      borderLeft: `5px solid ${v.completed ? '#334155' : statusColor(v.current_status)}`,
-      opacity: v.completed ? 0.92 : 1
-    }}>
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'flex-start',
-        flexWrap: 'wrap',
-        gap: '0.5rem'
+  const renderCard = (v) => {
+    const oTag = outcomeTag(v)
+    return (
+      <div key={v.id} style={{
+        background: 'white',
+        borderRadius: '10px',
+        padding: '1.25rem',
+        boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
+        borderLeft: `5px solid ${oTag ? oTag.bg : statusColor(v.current_status)}`,
+        opacity: v.completed ? 0.93 : 1
       }}>
-        <div>
-          <div style={{ fontWeight: 700, fontSize: '1.1rem' }}>
-            👤 {v.enumerator_name}
-          </div>
-          <div style={{ color: '#475569', fontSize: '0.95rem', marginTop: '0.2rem', fontWeight: 600 }}>
-            📍 {v.target_location}
-            {v.region && (
-              <span style={{ fontWeight: 500, color: '#64748b' }}> — {regionLabel(v.region)}</span>
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+          flexWrap: 'wrap',
+          gap: '0.5rem'
+        }}>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: '1.1rem' }}>
+              👤 {v.enumerator_name}
+            </div>
+            <div style={{ color: '#475569', fontSize: '0.95rem', marginTop: '0.2rem', fontWeight: 600 }}>
+              📍 {v.target_location}
+              {v.region && (
+                <span style={{ fontWeight: 500, color: '#64748b' }}> — {regionLabel(v.region)}</span>
+              )}
+            </div>
+            <div style={{ color: '#94a3b8', fontSize: '0.8rem', marginTop: '0.2rem' }}>
+              ID: {v.activity_id}
+            </div>
+            {v.completed && v.arrival_home_base_time && (
+              <div style={{ color: '#334155', fontSize: '0.85rem', marginTop: '0.3rem', fontWeight: 600 }}>
+                🏁 Closed: {formatTimeInRegion(v.arrival_home_base_time, v.region)}
+              </div>
             )}
           </div>
-          <div style={{ color: '#94a3b8', fontSize: '0.8rem', marginTop: '0.2rem' }}>
-            ID: {v.activity_id}
-          </div>
-          {v.completed && v.arrival_home_base_time && (
-            <div style={{ color: '#334155', fontSize: '0.85rem', marginTop: '0.3rem', fontWeight: 600 }}>
-              ✔️ Completed: {formatTimeInRegion(v.arrival_home_base_time, v.region)}
-            </div>
-          )}
-        </div>
-        <span style={{
-          background: v.completed ? '#334155' : statusColor(v.current_status),
-          color: 'white',
-          padding: '0.25rem 0.75rem',
-          borderRadius: '999px',
-          fontSize: '0.8rem',
-          fontWeight: 600
-        }}>
-          {v.completed ? '✔️ Completed' : statusLabel(v.current_status)}
-        </span>
-      </div>
-
-      {v.recent_updates && v.recent_updates.length > 0 && (
-        <div style={{ marginTop: '0.75rem', display: 'grid', gap: '0.5rem' }}>
-          {v.recent_updates.map((u, i) => {
-            const flags = updateFlags(u)
-            return (
-              <div key={u.id} style={{
-                background: '#f8fafc',
-                padding: '0.6rem 0.75rem',
-                borderRadius: '8px',
-                fontSize: '0.9rem',
-                color: '#334155',
-                borderLeft: flags.length > 0
-                  ? (u.security_issue ? '3px solid #dc2626' : '3px solid #f59e0b')
-                  : 'none'
-              }}>
-                <div style={{
-                  fontSize: '0.75rem',
-                  color: '#94a3b8',
-                  fontWeight: 600,
-                  marginBottom: '0.2rem'
-                }}>
-                  {i === 0 ? '💬 Latest update' : '💬 Earlier update'} · 🕐 {formatTimeInRegion(u.event_time || u.created_at, v.region)}
-                </div>
-                {u.cleaned_readable_update || u.raw_text}
-                {flags.length > 0 && (
-                  <div style={{ marginTop: '0.35rem', display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
-                    {flags.map(f => (
-                      <span key={f.label} style={{
-                        background: f.bg,
-                        color: f.color,
-                        padding: '0.1rem 0.5rem',
-                        borderRadius: '6px',
-                        fontSize: '0.72rem',
-                        fontWeight: 600
-                      }}>
-                        {f.label}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
-      )}
-
-      <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
-        {!v.completed && (
-          <a href={'/input?visit=' + v.id} style={{
-            padding: '0.35rem 0.8rem',
-            background: '#16a34a',
+          <span style={{
+            background: oTag ? oTag.bg : statusColor(v.current_status),
             color: 'white',
-            borderRadius: '8px',
+            padding: '0.25rem 0.75rem',
+            borderRadius: '999px',
+            fontSize: '0.8rem',
+            fontWeight: 600
+          }}>
+            {oTag ? oTag.label : statusLabel(v.current_status)}
+          </span>
+        </div>
+
+        {v.recent_updates && v.recent_updates.length > 0 && (
+          <div style={{ marginTop: '0.75rem', display: 'grid', gap: '0.5rem' }}>
+            {v.recent_updates.map((u, i) => {
+              const flags = updateFlags(u)
+              return (
+                <div key={u.id} style={{
+                  background: '#f8fafc',
+                  padding: '0.6rem 0.75rem',
+                  borderRadius: '8px',
+                  fontSize: '0.9rem',
+                  color: '#334155',
+                  borderLeft: flags.length > 0
+                    ? (u.security_issue ? '3px solid #dc2626' : '3px solid #f59e0b')
+                    : 'none'
+                }}>
+                  <div style={{
+                    fontSize: '0.75rem',
+                    color: '#94a3b8',
+                    fontWeight: 600,
+                    marginBottom: '0.2rem'
+                  }}>
+                    {i === 0 ? '💬 Latest update' : '💬 Earlier update'} · 🕐 {formatTimeInRegion(u.event_time || u.created_at, v.region)}
+                  </div>
+                  {u.cleaned_readable_update || u.raw_text}
+                  {flags.length > 0 && (
+                    <div style={{ marginTop: '0.35rem', display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
+                      {flags.map(f => (
+                        <span key={f.label} style={{
+                          background: f.bg,
+                          color: f.color,
+                          padding: '0.1rem 0.5rem',
+                          borderRadius: '6px',
+                          fontSize: '0.72rem',
+                          fontWeight: 600
+                        }}>
+                          {f.label}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          {!v.completed && (
+            <a href={'/input?visit=' + v.id} style={{
+              padding: '0.35rem 0.8rem',
+              background: '#16a34a',
+              color: 'white',
+              borderRadius: '8px',
+              textDecoration: 'none',
+              fontWeight: 600,
+              fontSize: '0.85rem'
+            }}>
+              ➕ Add Update
+            </a>
+          )}
+          <a href={'/visit/' + v.id} style={{
+            color: '#1a56db',
             textDecoration: 'none',
             fontWeight: 600,
             fontSize: '0.85rem'
           }}>
-            ➕ Add Update
+            📜 View full history →
           </a>
-        )}
-        <a href={'/visit/' + v.id} style={{
-          color: '#1a56db',
-          textDecoration: 'none',
-          fontWeight: 600,
-          fontSize: '0.85rem'
-        }}>
-          📜 View full history →
-        </a>
-        {v.completed && (
-          <button
-            onClick={() => handleArchive(v.id)}
-            style={{
-              padding: '0.35rem 0.8rem',
-              background: '#64748b',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              fontWeight: 600,
-              fontSize: '0.85rem'
-            }}
-          >
-            📦 Archive
-          </button>
-        )}
+          {v.completed && (
+            <button
+              onClick={() => handleArchive(v.id)}
+              style={{
+                padding: '0.35rem 0.8rem',
+                background: '#64748b',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontWeight: 600,
+                fontSize: '0.85rem'
+              }}
+            >
+              📦 Archive
+            </button>
+          )}
+        </div>
       </div>
-    </div>
-  )
+    )
+  }
 
   return (
     <main style={{ padding: '1.5rem', maxWidth: '1100px', margin: '0 auto' }}>
@@ -364,8 +380,8 @@ export default function Dashboard() {
           <div style={{ color: '#666', fontSize: '0.85rem' }}>🚩 Flagged Events →</div>
         </a>
         <div style={{ background: 'white', padding: '1rem', borderRadius: '10px', boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}>
-          <div style={{ fontSize: '1.6rem', fontWeight: 700 }}>{completedVisits.length}</div>
-          <div style={{ color: '#666', fontSize: '0.85rem' }}>Completed</div>
+          <div style={{ fontSize: '1.6rem', fontWeight: 700 }}>{closedVisits.length}</div>
+          <div style={{ color: '#666', fontSize: '0.85rem' }}>Closed Visits</div>
         </div>
       </div>
 
