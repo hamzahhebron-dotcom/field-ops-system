@@ -96,9 +96,8 @@ export default function VisitReportPage() {
     ...updates.map(u => ({
       id: u.id,
       icon: entryIcon(u),
-      time: u.created_at,
+      time: u.event_time || u.created_at,
       text: u.cleaned_readable_update || u.raw_text,
-      original: !isButtonEntry(u) && u.raw_text !== u.cleaned_readable_update ? u.raw_text : null,
       security: u.security_issue,
       delay: u.delay_flag,
       access: u.access_denied,
@@ -152,7 +151,7 @@ export default function VisitReportPage() {
         </button>
       </div>
 
-      {/* Visit info — enumerator first */}
+      {/* Visit info */}
       <div style={{
         background: 'white',
         padding: '1.5rem',
@@ -256,15 +255,6 @@ export default function VisitReportPage() {
                 }}>
                   {entry.text}
                 </div>
-                {entry.original && (
-                  <div style={{
-                    fontSize: '0.8rem',
-                    color: '#94a3b8',
-                    marginTop: '0.2rem'
-                  }}>
-                    Original: "{entry.original}"
-                  </div>
-                )}
                 {(entry.security || entry.delay || entry.access || entry.quality || entry.review) && (
                   <div style={{ marginTop: '0.35rem', display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
                     {entry.security && (
