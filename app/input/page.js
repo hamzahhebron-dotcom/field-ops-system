@@ -17,6 +17,7 @@ export default function InputPage() {
   const [selectedVisit, setSelectedVisit] = useState('')
   const [selectedEvent, setSelectedEvent] = useState('')
   const [updateText, setUpdateText] = useState('')
+  const [eventTime, setEventTime] = useState('')
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
   const router = useRouter()
@@ -44,7 +45,14 @@ export default function InputPage() {
         router.push('/view')
         return
       }
-      loadVisits()
+      await loadVisits()
+
+      // Pre-select visit if arriving from a dashboard card (?visit=xxx)
+      const urlParams = new URLSearchParams(window.location.search)
+      const visitParam = urlParams.get('visit')
+      if (visitParam) {
+        setSelectedVisit(visitParam)
+      }
     }
     init()
   }, [])
@@ -61,6 +69,11 @@ export default function InputPage() {
       return
     }
 
+    // Confirmation — updates are permanent
+    if (!confirm('⚠️ Updates cannot be changed or deleted once submitted.\n\nProceed?')) {
+      return
+    }
+
     setLoading(true)
     setMessage('')
 
@@ -71,6 +84,7 @@ export default function InputPage() {
         visit_id: selectedVisit,
         status_event: selectedEvent || null,
         raw_text: updateText.trim() || null,
+        event_time: eventTime || null,
       }),
     })
 
@@ -87,6 +101,7 @@ export default function InputPage() {
       }
       setSelectedEvent('')
       setUpdateText('')
+      setEventTime('')
       loadVisits()
     }
     setLoading(false)
@@ -97,7 +112,7 @@ export default function InputPage() {
       setMessage('❌ Select a visit first')
       return
     }
-    if (!confirm(`Archive "${selectedVisitData.activity_id} — ${selectedVisitData.enumerator_name}"?\n\nThe visit will move to the Archive. It can be restored later.`)) {
+    if (!confirm(`Archive this visit for ${selectedVisitData.enumerator_name}?\n\nThe visit will move to the Archive. It can be restored later.`)) {
       return
     }
 
@@ -115,6 +130,7 @@ export default function InputPage() {
       setSelectedVisit('')
       setSelectedEvent('')
       setUpdateText('')
+      setEventTime('')
       loadVisits()
     }
     setLoading(false)
@@ -125,7 +141,7 @@ export default function InputPage() {
       setMessage('❌ Select a visit first')
       return
     }
-    if (!confirm(`⚠️ PERMANENTLY DELETE "${selectedVisitData.activity_id} — ${selectedVisitData.enumerator_name}"?\n\nThis deletes the visit AND its entire update log forever, including any flagged events. This CANNOT be undone.\n\nClick OK to delete permanently.`)) {
+    if (!confirm(`⚠️ PERMANENTLY DELETE the visit for ${selectedVisitData.enumerator_name} at ${selectedVisitData.target_location}?\n\nThis deletes the visit AND its entire update log forever, including any flagged events. This CANNOT be undone.\n\nClick OK to delete permanently.`)) {
       return
     }
 
@@ -143,6 +159,7 @@ export default function InputPage() {
       setSelectedVisit('')
       setSelectedEvent('')
       setUpdateText('')
+      setEventTime('')
       loadVisits()
     }
     setLoading(false)
@@ -204,7 +221,7 @@ export default function InputPage() {
             <option value="">-- Choose a visit --</option>
             {visits.map((v) => (
               <option key={v.id} value={v.id}>
-                {v.activity_id} — {v.enumerator_name} — {v.target_location}
+                {v.enumerator_name} — {v.target_location}
               </option>
             ))}
           </select>
@@ -246,7 +263,7 @@ export default function InputPage() {
         </div>
 
         {/* Optional comment */}
-        <div style={{ marginBottom: '1.5rem' }}>
+        <div style={{ marginBottom: '1.25rem' }}>
           <label style={{ display: 'block', marginBottom: '0.4rem', fontWeight: 500 }}>
             Comment <span style={{ color: '#94a3b8', fontWeight: 400 }}>(optional)</span>
           </label>
@@ -266,6 +283,45 @@ export default function InputPage() {
               resize: 'vertical'
             }}
           />
+        </div>
+
+        {/* Optional event time */}
+        <div style={{ marginBottom: '1.5rem' }}>
+          <label style={{ display: 'block', marginBottom: '0.4rem', fontWeight: 500 }}>
+            When did this happen? <span style={{ color: '#94a3b8', fontWeight: 400 }}>(optional — leave empty for now)</span>
+          </label>
+          <input
+            type="datetime-local"
+            value={eventTime}
+            onChange={(e) => setEventTime(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '0.6rem 0.8rem',
+              border: '1px solid #ddd',
+              borderRadius: '8px',
+              fontSize: '1rem',
+              boxSizing: 'border-box'
+            }}
+          />
+          {eventTime && (
+            <button
+              type="button"
+              onClick={() => setEventTime('')}
+              style={{
+                marginTop: '0.4rem',
+                padding: '0.25rem 0.6rem',
+                background: '#f1f5f9',
+                color: '#475569',
+                border: '1px solid #e2e8f0',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '0.8rem',
+                fontWeight: 600
+              }}
+            >
+              ✕ Clear (use current time)
+            </button>
+          )}
         </div>
 
         {message && (
@@ -293,7 +349,7 @@ export default function InputPage() {
           {loading ? 'Working...' : 'Submit Update'}
         </button>
 
-        {/* Visit management — only shows when a visit is selected */}
+        {/* Visit management */}
         {selectedVisit && (
           <div style={{
             marginTop: '1.5rem',
