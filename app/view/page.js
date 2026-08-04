@@ -8,6 +8,7 @@ export default function ViewOnlyPage() {
   const [user, setUser] = useState(null)
   const [visits, setVisits] = useState([])
   const [flaggedCount, setFlaggedCount] = useState(0)
+  const [filter, setFilter] = useState('all')
   const [lastRefresh, setLastRefresh] = useState(null)
   const router = useRouter()
 
@@ -95,8 +96,22 @@ export default function ViewOnlyPage() {
   if (!user) return <p style={{ padding: '2rem' }}>Loading...</p>
 
   const visibleVisits = visits.filter(v => !v.archived)
-  const activeVisits = visibleVisits.filter(v => !v.completed)
+  const plannedVisits = visibleVisits.filter(v => !v.completed && v.current_status === 'planned')
+  const activeVisits = visibleVisits.filter(v => !v.completed && v.current_status !== 'planned')
   const completedVisits = visibleVisits.filter(v => v.completed)
+
+  const FILTERS = [
+    { key: 'all', label: `All (${visibleVisits.length})` },
+    { key: 'planned', label: `🗓 Planned (${plannedVisits.length})` },
+    { key: 'active', label: `🟢 Active (${activeVisits.length})` },
+    { key: 'completed', label: `✔️ Completed (${completedVisits.length})` },
+  ]
+
+  const filteredVisits =
+    filter === 'planned' ? plannedVisits :
+    filter === 'active' ? activeVisits :
+    filter === 'completed' ? completedVisits :
+    [...plannedVisits, ...activeVisits, ...completedVisits]
 
   const renderCard = (v) => (
     <div key={v.id} style={{
@@ -166,7 +181,7 @@ export default function ViewOnlyPage() {
                   fontWeight: 600,
                   marginBottom: '0.2rem'
                 }}>
-                  {i === 0 ? '💬 Latest update' : '💬 Earlier update'} · 🕐 {formatTimeInRegion(u.created_at, v.region)}
+                  {i === 0 ? '💬 Latest update' : '💬 Earlier update'} · 🕐 {formatTimeInRegion(u.event_time || u.created_at, v.region)}
                 </div>
                 {u.cleaned_readable_update || u.raw_text}
                 {flags.length > 0 && (
@@ -265,22 +280,35 @@ export default function ViewOnlyPage() {
         </div>
       </div>
 
-      <h2 style={{ fontSize: '1.1rem', marginBottom: '0.75rem' }}>🟢 Active Visits</h2>
-      {activeVisits.length === 0 && (
-        <p style={{ color: '#666' }}>No active visits right now.</p>
-      )}
-      <div style={{ display: 'grid', gap: '1rem', marginBottom: '2rem' }}>
-        {activeVisits.map(renderCard)}
+      {/* Filter buttons */}
+      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1.25rem' }}>
+        {FILTERS.map(f => (
+          <button
+            key={f.key}
+            onClick={() => setFilter(f.key)}
+            style={{
+              padding: '0.4rem 0.9rem',
+              background: filter === f.key ? '#1a56db' : 'white',
+              color: filter === f.key ? 'white' : '#334155',
+              border: '1px solid ' + (filter === f.key ? '#1a56db' : '#e2e8f0'),
+              borderRadius: '999px',
+              cursor: 'pointer',
+              fontWeight: 600,
+              fontSize: '0.85rem'
+            }}
+          >
+            {f.label}
+          </button>
+        ))}
       </div>
 
-      {completedVisits.length > 0 && (
-        <>
-          <h2 style={{ fontSize: '1.1rem', marginBottom: '0.75rem' }}>✔️ Completed Visits</h2>
-          <div style={{ display: 'grid', gap: '1rem' }}>
-            {completedVisits.map(renderCard)}
-          </div>
-        </>
+      {filteredVisits.length === 0 && (
+        <p style={{ color: '#666' }}>No visits in this view.</p>
       )}
+
+      <div style={{ display: 'grid', gap: '1rem' }}>
+        {filteredVisits.map(renderCard)}
+      </div>
     </main>
   )
 }
