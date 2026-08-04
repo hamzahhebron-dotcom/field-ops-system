@@ -47,7 +47,6 @@ export default function InputPage() {
       }
       await loadVisits()
 
-      // Pre-select visit if arriving from a dashboard card (?visit=xxx)
       const urlParams = new URLSearchParams(window.location.search)
       const visitParam = urlParams.get('visit')
       if (visitParam) {
@@ -69,7 +68,15 @@ export default function InputPage() {
       return
     }
 
-    // Confirmation — updates are permanent
+    // If closing the visit, ask about the outcome
+    let outcome = null
+    if (selectedEvent === 'arrived_at_base') {
+      outcome = confirm(
+        'Closing this visit.\n\nWas data collection FULLY completed?\n\nOK = Fully completed\nCancel = Partially completed'
+      ) ? 'completed' : 'partial'
+    }
+
+    // Permanence confirmation
     if (!confirm('⚠️ Updates cannot be changed or deleted once submitted.\n\nProceed?')) {
       return
     }
@@ -85,6 +92,7 @@ export default function InputPage() {
         status_event: selectedEvent || null,
         raw_text: updateText.trim() || null,
         event_time: eventTime || null,
+        outcome: outcome,
       }),
     })
 
@@ -94,11 +102,57 @@ export default function InputPage() {
       setMessage('❌ Error: ' + data.error)
     } else {
       if (selectedEvent === 'arrived_at_base') {
-        setMessage('✅ Update saved. Visit completed and closed! 🎉')
+        setMessage(outcome === 'partial'
+          ? '✅ Visit closed as 🟡 Partially Completed.'
+          : '✅ Visit closed as ✔️ Completed! 🎉')
         setSelectedVisit('')
       } else {
         setMessage('✅ Update submitted successfully!')
       }
+      setSelectedEvent('')
+      setUpdateText('')
+      setEventTime('')
+      loadVisits()
+    }
+    setLoading(false)
+  }
+
+  const handleCancelVisit = async () => {
+    if (!selectedVisit || !selectedVisitData) {
+      setMessage('❌ Select a visit first')
+      return
+    }
+
+    const reason = prompt(
+      `⛔ Cancelling the visit for ${selectedVisitData.enumerator_name} at ${selectedVisitData.target_location}.\n\nA reason is required (e.g. "security situation", "site closed", "visit called off before departure"):`
+    )
+    if (reason === null) return // user pressed cancel on the prompt
+    if (!reason.trim()) {
+      setMessage('❌ A cancellation reason is required')
+      return
+    }
+
+    if (!confirm(`⚠️ This will close the visit as CANCELLED with reason:\n\n"${reason.trim()}"\n\nThis cannot be changed. Proceed?`)) {
+      return
+    }
+
+    setLoading(true)
+    const res = await fetch('/api/updates', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        visit_id: selectedVisit,
+        cancel_visit: true,
+        cancel_reason: reason.trim(),
+        event_time: eventTime || null,
+      }),
+    })
+    const data = await res.json()
+    if (data.error) {
+      setMessage('❌ ' + data.error)
+    } else {
+      setMessage('⛔ Visit closed as Cancelled')
+      setSelectedVisit('')
       setSelectedEvent('')
       setUpdateText('')
       setEventTime('')
@@ -366,7 +420,25 @@ export default function InputPage() {
             }}>
               Visit Management
             </p>
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={handleCancelVisit}
+                disabled={loading}
+                style={{
+                  flex: '1 1 100%',
+                  padding: '0.6rem',
+                  background: '#b45309',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '0.9rem',
+                  fontWeight: 600,
+                  cursor: loading ? 'not-allowed' : 'pointer'
+                }}
+              >
+                ⛔ Cancel Visit (close as Cancelled)
+              </button>
               <button
                 type="button"
                 onClick={handleArchive}
