@@ -188,7 +188,6 @@ export async function POST(request) {
       const event = STATUS_EVENTS[body.status_event]
       const isClosing = body.status_event === 'arrived_at_base'
 
-      // For closing: outcome must be 'completed' or 'partial'
       const outcome = isClosing
         ? (body.outcome === 'partial' ? 'partial' : 'completed')
         : null
@@ -236,7 +235,7 @@ export async function POST(request) {
         .eq('id', body.visit_id)
     }
 
-    // ---- 2. Free-text comment (AI parsed, flags attach to THIS update only) ----
+    // ---- 2. Free-text comment (AI parsed — flags and notes ONLY, never status) ----
     if (hasComment) {
       let ai = null
       try {
@@ -271,16 +270,12 @@ export async function POST(request) {
       }
       results.push(commentRow)
 
-      const visitUpdate = {
-        latest_update: ai && ai.cleanedReadableUpdate ? ai.cleanedReadableUpdate : body.raw_text,
-      }
-      if (!hasEvent && ai && ai.status && ai.status !== 'unknown' && ai.confidence >= 0.7) {
-        visitUpdate.current_status = ai.status
-      }
-
+      // Comments never change visit status — only status buttons do.
       await supabaseAdmin
         .from('visits')
-        .update(visitUpdate)
+        .update({
+          latest_update: ai && ai.cleanedReadableUpdate ? ai.cleanedReadableUpdate : body.raw_text,
+        })
         .eq('id', body.visit_id)
     }
 
