@@ -46,10 +46,22 @@ The JSON must have exactly this structure:
   "delayFlag": true or false,
   "accessDenied": true or false,
   "dataQualityIssue": true or false,
-  "cleanedReadableUpdate": string (a clean one-sentence English summary),
+  "cleanedReadableUpdate": string (see CLEANED TEXT RULES below),
   "confidence": number between 0 and 1,
   "needsHumanReview": true or false
 }
+
+CLEANED TEXT RULES — THIS IS A CLEANUP, NOT A SUMMARY:
+- cleanedReadableUpdate must preserve EVERY fact from the original: all numbers, durations, times, names, places, quantities, conditions, and plans. NOTHING may be omitted, shortened, or generalized.
+- Only fix grammar, spelling, and awkward phrasing. Keep the same level of detail, even if the result is several sentences long.
+- If the text is in Arabic, translate it fully to English — a complete translation, not a summary.
+- If the original is already clear English, return it nearly unchanged.
+- It is a FAILURE to drop a detail. When unsure whether something matters, keep it.
+
+Example:
+Original: "Signal received from Serghei that convoy moved, will take 80 min to arrive at warehouse, enumerators r 20 min away and will remain on standby"
+CORRECT: "Signal received from Serghei that the convoy has moved and will take 80 minutes to arrive at the warehouse; the enumerators are 20 minutes away and will remain on standby."
+WRONG: "The convoy is on the way and enumerators are waiting." (details dropped — never do this)
 
 FLAG DEFINITIONS — these concern the SAFETY and WORK of the field enumerator:
 
@@ -83,7 +95,6 @@ STRICT RULES:
 - Only set "status" if the text CLEARLY states a movement or stage change. Otherwise use "unknown".
 - NEVER set status to any completion or return state based on future plans or intentions.
 - If the text is unclear or you are not confident, set needsHumanReview to true and confidence below 0.5.
-- If the text is in Arabic, translate and summarize it in English in cleanedReadableUpdate.
 - Return ONLY the JSON object. Nothing else.`
 
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -235,7 +246,7 @@ export async function POST(request) {
         .eq('id', body.visit_id)
     }
 
-    // ---- 2. Free-text comment (AI parsed — flags and notes ONLY, never status) ----
+    // ---- 2. Free-text comment (AI parsed — flags and cleanup ONLY, never status) ----
     if (hasComment) {
       let ai = null
       try {
