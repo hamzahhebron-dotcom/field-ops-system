@@ -46,28 +46,23 @@ The JSON must have exactly this structure:
   "delayFlag": true or false,
   "accessDenied": true or false,
   "dataQualityIssue": true or false,
-  "cleanedReadableUpdate": string (see CLEANED TEXT RULES below),
+  "cleanedReadableUpdate": string,
   "confidence": number between 0 and 1,
   "needsHumanReview": true or false
 }
 
-CLEANED TEXT RULES — THIS IS A CLEANUP, NOT A SUMMARY:
+CLEANED TEXT RULES - THIS IS A CLEANUP, NOT A SUMMARY:
 - cleanedReadableUpdate must preserve EVERY fact from the original: all numbers, durations, times, names, places, quantities, conditions, and plans. NOTHING may be omitted, shortened, or generalized.
 - Only fix grammar, spelling, and awkward phrasing. Keep the same level of detail, even if the result is several sentences long.
-- If the text is in Arabic, translate it fully to English — a complete translation, not a summary.
+- If the text is in Arabic, translate it fully to English - a complete translation, not a summary.
 - If the original is already clear English, return it nearly unchanged.
 - It is a FAILURE to drop a detail. When unsure whether something matters, keep it.
 
-Example:
-Original: "Signal received from Serghei that convoy moved, will take 80 min to arrive at warehouse, enumerators r 20 min away and will remain on standby"
-CORRECT: "Signal received from Serghei that the convoy has moved and will take 80 minutes to arrive at the warehouse; the enumerators are 20 minutes away and will remain on standby."
-WRONG: "The convoy is on the way and enumerators are waiting." (details dropped — never do this)
+FLAG DEFINITIONS - flags mark PROBLEMS, not routine field procedures.
 
-FLAG DEFINITIONS — flags mark PROBLEMS, not routine field procedures.
-
-CRITICAL PRINCIPLE — ROUTINE vs INCIDENT:
+CRITICAL PRINCIPLE - ROUTINE vs INCIDENT:
 Normal field procedures are NOT flagged. These are all ROUTINE and get NO flags:
-- Waiting at a gate/door for security or guards to grant entry (standard check-in procedure)
+- Waiting at a gate or door for security or guards to grant entry (standard check-in procedure)
 - Routine ID checks, registration, sign-in at facilities
 - Normal waiting at checkpoints without trouble
 - Coordination pauses (waiting for a focal point, waiting for a convoy signal, standby)
@@ -76,37 +71,36 @@ A flag requires an actual PROBLEM: a threat, a refusal, a loss, an abnormal situ
 securityIssue = true ONLY when there is an actual safety concern:
 - Security incidents, threats, shooting, shelling, detention, arrest
 - Checkpoint trouble BEYOND routine waiting (harassment, confiscation, being held)
-- LOSS OF CONTACT: the enumerator is unreachable, not responding, silent, missing, or has not checked in for an extended period — this is ALWAYS a security issue, never a data quality issue
+- LOSS OF CONTACT: the enumerator is unreachable, not responding, silent, missing, or has not checked in for an extended period - this is ALWAYS a security issue, never a data quality issue
 - Evacuations, closures for security reasons, nearby hostilities
-- The mere presence of the WORD "security" (e.g. "waiting for security to open the gate") is NOT a security issue.
+- The mere presence of the WORD security (e.g. waiting for security to open the gate) is NOT a security issue.
 
 delayFlag = true ONLY when the update states the visit is actually running behind schedule or explicitly calls it a delay. Routine short waits that are part of normal procedure are NOT delays.
 
-accessDenied = true ONLY when entry was actually REFUSED: turned away, site closed to them, permission denied. WAITING to be let in is not access denied — being told NO is.
+accessDenied = true ONLY when entry was actually REFUSED: turned away, site closed to them, permission denied. WAITING to be let in is not access denied - being told NO is.
 
 dataQualityIssue = true ONLY for problems with the collected data itself:
 - Respondents unavailable or refusing interviews
 - Not all beneficiaries reached, sampling incomplete
 - Tools could not be applied, forms incomplete
-This flag is about THE DATA, never about the enumerator's safety or reachability.
+This flag is about THE DATA, never about the enumerator safety or reachability.
 
 EXAMPLES:
-- "Team at the door waiting for security to let them in" → NO FLAGS (routine entry procedure)
-- "Waiting at reception for the focal point" → NO FLAGS (routine)
-- "Passed the checkpoint after normal ID check" → NO FLAGS (routine)
-- "Enumerator hasn't responded for 3 hours" → securityIssue: true, riskLevel: "medium" or higher
-- "We lost contact with Yaser" → securityIssue: true
-- "Held at checkpoint for 2 hours, soldiers took their IDs" → securityIssue: true, delayFlag: true
-- "Only reached 60% of beneficiaries" → dataQualityIssue: true
-- "Turned away at the gate by authorities, visit cannot proceed" → accessDenied: true
-- "Stuck in traffic, 30 min behind schedule" → delayFlag: true
-- "Shooting heard near the site, team sheltering" → securityIssue: true, riskLevel: "high"
+- "Team at the door waiting for security to let them in" - NO FLAGS (routine entry procedure)
+- "Waiting at reception for the focal point" - NO FLAGS (routine)
+- "Enumerator has not responded for 3 hours" - securityIssue: true, riskLevel medium or higher
+- "We lost contact with Yaser" - securityIssue: true
+- "Held at checkpoint for 2 hours, soldiers took their IDs" - securityIssue: true, delayFlag: true
+- "Only reached 60 percent of beneficiaries" - dataQualityIssue: true
+- "Turned away at the gate by authorities, visit cannot proceed" - accessDenied: true
+- "Stuck in traffic, 30 min behind schedule" - delayFlag: true
+- "Shooting heard near the site, team sheltering" - securityIssue: true, riskLevel high
 
 STRICT RULES:
 - Do NOT invent information that is not in the text. Flags are false unless the text clearly indicates an actual problem.
 - When in doubt whether something is routine or a problem, do NOT flag it.
 - Multiple flags can be true at once when the text supports them.
-- Only set "status" if the text CLEARLY states a movement or stage change. Otherwise use "unknown".
+- Only set status if the text CLEARLY states a movement or stage change. Otherwise use unknown.
 - NEVER set status to any completion or return state based on future plans or intentions.
 - If the text is unclear or you are not confident, set needsHumanReview to true and confidence below 0.5.
 - Return ONLY the JSON object. Nothing else.`
@@ -137,7 +131,6 @@ STRICT RULES:
   return JSON.parse(data.choices[0].message.content)
 }
 
-// Submit a new update (button event, comment, cancellation, or combination)
 export async function POST(request) {
   try {
     const body = await request.json()
@@ -163,7 +156,6 @@ export async function POST(request) {
 
     const results = []
 
-    // ---- 0. Cancellation (closes the visit as Cancelled) ----
     if (isCancellation) {
       const reason = (body.cancel_reason || '').trim()
       if (!reason) {
@@ -173,7 +165,7 @@ export async function POST(request) {
         )
       }
 
-      const label = 'Visit cancelled — ' + reason
+      const label = 'Visit cancelled - ' + reason
 
       const { data: cancelRow, error: cancelError } = await supabaseAdmin
         .from('visit_updates')
@@ -208,7 +200,6 @@ export async function POST(request) {
       return NextResponse.json({ updates: results })
     }
 
-    // ---- 1. Button event (exact, no AI, never flagged) ----
     if (hasEvent) {
       const event = STATUS_EVENTS[body.status_event]
       const isClosing = body.status_event === 'arrived_at_base'
@@ -219,8 +210,8 @@ export async function POST(request) {
 
       const label = isClosing
         ? (outcome === 'partial'
-            ? 'Arrived at home base — visit partially completed'
-            : 'Arrived at home base — visit completed')
+            ? 'Arrived at home base - visit partially completed'
+            : 'Arrived at home base - visit completed')
         : event.label
 
       const { data: eventRow, error: eventError } = await supabaseAdmin
@@ -260,7 +251,6 @@ export async function POST(request) {
         .eq('id', body.visit_id)
     }
 
-    // ---- 2. Free-text comment (AI parsed — flags and cleanup ONLY, never status) ----
     if (hasComment) {
       let ai = null
       try {
@@ -295,7 +285,6 @@ export async function POST(request) {
       }
       results.push(commentRow)
 
-      // Comments never change visit status — only status buttons do.
       await supabaseAdmin
         .from('visits')
         .update({
@@ -310,7 +299,6 @@ export async function POST(request) {
   }
 }
 
-// Edit an update's text or flags
 export async function PATCH(request) {
   try {
     const body = await request.json()
@@ -347,7 +335,6 @@ export async function PATCH(request) {
   }
 }
 
-// Delete an update
 export async function DELETE(request) {
   try {
     const body = await request.json()
@@ -366,6 +353,52 @@ export async function DELETE(request) {
     }
 
     return NextResponse.json({ success: true })
+  } catch (err) {
+    return NextResponse.json({ error: 'Server error' }, { status: 500 })
+  }
+}
+
+export async function GET(request) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const visitId = searchParams.get('visit_id')
+    const flaggedOnly = searchParams.get('flagged') === 'true'
+
+    if (flaggedOnly) {
+      const { data, error } = await supabaseAdmin
+        .from('visit_updates')
+        .select('*')
+        .or('security_issue.eq.true,delay_flag.eq.true,access_denied.eq.true,data_quality_issue.eq.true')
+        .order('created_at', { ascending: false })
+
+      if (error) {
+        return NextResponse.json({ error: error.message }, { status: 400 })
+      }
+
+      return NextResponse.json({ updates: data })
+    }
+
+    if (!visitId) {
+      return NextResponse.json({ error: 'Missing visit_id' }, { status: 400 })
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('visit_updates')
+      .select('*')
+      .eq('visit_id', visitId)
+      .order('created_at', { ascending: true })
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+
+    const sorted = (data || []).sort((a, b) => {
+      const ta = new Date(a.event_time || a.created_at).getTime()
+      const tb = new Date(b.event_time || b.created_at).getTime()
+      return ta - tb
+    })
+
+    return NextResponse.json({ updates: sorted })
   } catch (err) {
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
   }
