@@ -22,6 +22,15 @@ export default function InputPage() {
   const [loading, setLoading] = useState(false)
   const router = useRouter()
 
+  // Convert the browser's local datetime-local value to a proper ISO timestamp.
+  // The browser knows the user's timezone, so this fixes the UTC shift.
+  const toISO = (localValue) => {
+    if (!localValue) return null
+    const d = new Date(localValue)
+    if (isNaN(d.getTime())) return null
+    return d.toISOString()
+  }
+
   const loadVisits = async () => {
     const res = await fetch('/api/visits')
     const data = await res.json()
@@ -68,7 +77,6 @@ export default function InputPage() {
       return
     }
 
-    // If closing the visit, ask about the outcome
     let outcome = null
     if (selectedEvent === 'arrived_at_base') {
       outcome = confirm(
@@ -76,8 +84,7 @@ export default function InputPage() {
       ) ? 'completed' : 'partial'
     }
 
-    // Permanence confirmation
-    if (!confirm('⚠️ Updates cannot be changed or deleted once submitted.\n\nProceed?')) {
+    if (!confirm('Submit this update?')) {
       return
     }
 
@@ -91,7 +98,7 @@ export default function InputPage() {
         visit_id: selectedVisit,
         status_event: selectedEvent || null,
         raw_text: updateText.trim() || null,
-        event_time: eventTime || null,
+        event_time: toISO(eventTime),
         outcome: outcome,
       }),
     })
@@ -126,13 +133,13 @@ export default function InputPage() {
     const reason = prompt(
       `⛔ Cancelling the visit for ${selectedVisitData.enumerator_name} at ${selectedVisitData.target_location}.\n\nA reason is required (e.g. "security situation", "site closed", "visit called off before departure"):`
     )
-    if (reason === null) return // user pressed cancel on the prompt
+    if (reason === null) return
     if (!reason.trim()) {
       setMessage('❌ A cancellation reason is required')
       return
     }
 
-    if (!confirm(`⚠️ This will close the visit as CANCELLED with reason:\n\n"${reason.trim()}"\n\nThis cannot be changed. Proceed?`)) {
+    if (!confirm(`⚠️ This will close the visit as CANCELLED with reason:\n\n"${reason.trim()}"\n\nProceed?`)) {
       return
     }
 
@@ -144,7 +151,7 @@ export default function InputPage() {
         visit_id: selectedVisit,
         cancel_visit: true,
         cancel_reason: reason.trim(),
-        event_time: eventTime || null,
+        event_time: toISO(eventTime),
       }),
     })
     const data = await res.json()
