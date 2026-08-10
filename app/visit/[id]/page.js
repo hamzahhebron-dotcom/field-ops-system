@@ -12,7 +12,10 @@ export default function VisitReportPage() {
   const [isEditor, setIsEditor] = useState(false)
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
-  const [flagEditorFor, setFlagEditorFor] = useState(null) // update id whose flag panel is open
+  const [flagEditorFor, setFlagEditorFor] = useState(null)
+  const [editPanelFor, setEditPanelFor] = useState(null)
+  const [editText, setEditText] = useState('')
+  const [editTime, setEditTime] = useState('')
 
   const loadData = async () => {
     const vRes = await fetch('/api/visits')
@@ -49,26 +52,59 @@ export default function VisitReportPage() {
     init()
   }, [])
 
-  const handleEditUpdate = async (u) => {
-    const current = u.cleaned_readable_update || u.raw_text
-    const newText = prompt('Edit this update:', current)
-    if (newText === null) return
-    if (!newText.trim()) {
+  // Convert a stored ISO timestamp to a datetime-local value in the browser's timezone
+  const isoToLocalInput = (iso) => {
+    if (!iso) return ''
+    const d = new Date(iso)
+    if (isNaN(d.getTime())) return ''
+    const pad = (n) => String(n).padStart(2, '0')
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  }
+
+  const openEditPanel = (u) => {
+    setFlagEditorFor(null)
+    setEditPanelFor(u.id)
+    setEditText(u.cleaned_readable_update || u.raw_text || '')
+    setEditTime(isoToLocalInput(u.event_time || u.created_at))
+  }
+
+  const handleSaveEdit = async (u) => {
+    if (!editText.trim()) {
       setMessage('❌ Update text cannot be empty')
       return
     }
-    if (newText.trim() === current) return
+
+    const payload = { update_id: u.id }
+
+    const currentText = u.cleaned_readable_update || u.raw_text || ''
+    if (editText.trim() !== currentText) {
+      payload.new_text = editText.trim()
+    }
+
+    const currentTimeLocal = isoToLocalInput(u.event_time || u.created_at)
+    if (editTime && editTime !== currentTimeLocal) {
+      const d = new Date(editTime)
+      if (!isNaN(d.getTime())) {
+        payload.new_event_time = d.toISOString()
+      }
+    }
+
+    if (!payload.new_text && !payload.new_event_time) {
+      setEditPanelFor(null)
+      return
+    }
 
     const res = await fetch('/api/updates', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ update_id: u.id, new_text: newText.trim() }),
+      body: JSON.stringify(payload),
     })
     const data = await res.json()
     if (data.error) {
       setMessage('❌ ' + data.error)
     } else {
-      setMessage('✅ Update edited')
+      setMessage('✅ Update saved')
+      setEditPanelFor(null)
       loadData()
     }
   }
@@ -90,6 +126,7 @@ export default function VisitReportPage() {
     } else {
       setMessage('🗑️ Update deleted')
       setFlagEditorFor(null)
+      setEditPanelFor(null)
       loadData()
     }
   }
@@ -177,7 +214,7 @@ export default function VisitReportPage() {
   return (
     <main style={{ padding: '1.5rem', maxWidth: '800px', margin: '0 auto' }}>
 
-      {/* Toolbar — hidden when printing */}
+      {/* Toolbar */}
       <div className="no-print" style={{
         marginBottom: '1rem',
         display: 'flex',
@@ -380,12 +417,12 @@ export default function VisitReportPage() {
                   {isEditor && (
                     <span className="no-print" style={{ display: 'flex', gap: '0.4rem' }}>
                       <button
-                        onClick={() => handleEditUpdate(u)}
+                        onClick={() => editPanelFor === u.id ? setEditPanelFor(null) : openEditPanel(u)}
                         style={{
                           padding: '0.15rem 0.5rem',
-                          background: '#f1f5f9',
-                          color: '#475569',
-                          border: '1px solid #e2e8f0',
+                          background: editPanelFor === u.id ? '#1a56db' : '#f1f5f9',
+                          color: editPanelFor === u.id ? 'white' : '#475569',
+                          border: '1px solid ' + (editPanelFor === u.id ? '#1a56db' : '#e2e8f0'),
                           borderRadius: '6px',
                           cursor: 'pointer',
                           fontSize: '0.75rem',
@@ -395,7 +432,7 @@ export default function VisitReportPage() {
                         ✏️ Edit
                       </button>
                       <button
-                        onClick={() => setFlagEditorFor(flagEditorFor === u.id ? null : u.id)}
+                        onClick={() => { setEditPanelFor(null); setFlagEditorFor(flagEditorFor === u.id ? null : u.id) }}
                         style={{
                           padding: '0.15rem 0.5rem',
                           background: flagEditorFor === u.id ? '#1a56db' : '#f1f5f9',
@@ -436,7 +473,7 @@ export default function VisitReportPage() {
                   {u.cleaned_readable_update || u.raw_text}
                 </div>
 
-                {/* Current flags display */}
+                {/* Current flags */}
                 {(u.security_issue || u.delay_flag || u.access_denied || u.data_quality_issue || u.needs_human_review) && (
                   <div style={{ marginTop: '0.35rem', display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
                     {FLAG_DEFS.map(f => u[f.key] && (
@@ -449,6 +486,86 @@ export default function VisitReportPage() {
                         👀 Needs Review
                       </span>
                     )}
+                  </div>
+                )}
+
+                {/* Edit panel: text + timestamp */}
+                {isEditor && editPanelFor === u.id && (
+                  <div className="no-print" style={{
+                    marginTop: '0.5rem',
+                    padding: '0.75rem',
+                    background: '#f8fafc',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '8px'
+                  }}>
+                    <label style={{ display: 'block', fontSize: '0.75rem', color: '#94a3b8', fontWeight: 600, marginBottom: '0.3rem' }}>
+                      Update text:
+                    </label>
+                    <textarea
+                      value={editText}
+                      onChange={(e) => setEditText(e.target.value)}
+                      rows={3}
+                      style={{
+                        width: '100%',
+                        padding: '0.5rem 0.7rem',
+                        border: '1px solid #ddd',
+                        borderRadius: '8px',
+                        fontSize: '0.9rem',
+                        boxSizing: 'border-box',
+                        fontFamily: 'inherit',
+                        resize: 'vertical',
+                        marginBottom: '0.6rem'
+                      }}
+                    />
+                    <label style={{ display: 'block', fontSize: '0.75rem', color: '#94a3b8', fontWeight: 600, marginBottom: '0.3rem' }}>
+                      Event time:
+                    </label>
+                    <input
+                      type="datetime-local"
+                      value={editTime}
+                      onChange={(e) => setEditTime(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '0.5rem 0.7rem',
+                        border: '1px solid #ddd',
+                        borderRadius: '8px',
+                        fontSize: '0.9rem',
+                        boxSizing: 'border-box',
+                        marginBottom: '0.6rem'
+                      }}
+                    />
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <button
+                        onClick={() => handleSaveEdit(u)}
+                        style={{
+                          padding: '0.4rem 1rem',
+                          background: '#16a34a',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '8px',
+                          cursor: 'pointer',
+                          fontWeight: 600,
+                          fontSize: '0.85rem'
+                        }}
+                      >
+                        💾 Save
+                      </button>
+                      <button
+                        onClick={() => setEditPanelFor(null)}
+                        style={{
+                          padding: '0.4rem 1rem',
+                          background: '#f1f5f9',
+                          color: '#475569',
+                          border: '1px solid #e2e8f0',
+                          borderRadius: '8px',
+                          cursor: 'pointer',
+                          fontWeight: 600,
+                          fontSize: '0.85rem'
+                        }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
                   </div>
                 )}
 
