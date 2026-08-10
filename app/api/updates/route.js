@@ -311,6 +311,12 @@ export async function PATCH(request) {
     if (typeof body.new_text === 'string' && body.new_text.trim().length > 0) {
       changes.cleaned_readable_update = body.new_text.trim()
     }
+    if (body.new_event_time) {
+      const d = new Date(body.new_event_time)
+      if (!isNaN(d.getTime())) {
+        changes.event_time = d.toISOString()
+      }
+    }
     if (typeof body.security_issue === 'boolean') changes.security_issue = body.security_issue
     if (typeof body.delay_flag === 'boolean') changes.delay_flag = body.delay_flag
     if (typeof body.access_denied === 'boolean') changes.access_denied = body.access_denied
