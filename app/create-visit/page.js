@@ -14,6 +14,15 @@ export default function CreateVisitPage() {
   const [loading, setLoading] = useState(false)
   const router = useRouter()
 
+  // Convert the browser's local datetime-local value to a proper ISO timestamp.
+  // The browser knows the user's timezone, so this prevents the UTC shift.
+  const toISO = (localValue) => {
+    if (!localValue) return null
+    const d = new Date(localValue)
+    if (isNaN(d.getTime())) return null
+    return d.toISOString()
+  }
+
   useEffect(() => {
     const checkAuth = async () => {
       const { data: { session } } = await supabase.auth.getSession()
@@ -50,7 +59,7 @@ export default function CreateVisitPage() {
         enumerator_name: enumeratorName,
         region: region,
         target_location: targetLocation,
-        planned_departure_time: plannedDeparture,
+        planned_departure_time: toISO(plannedDeparture),
       }),
     })
 
@@ -169,7 +178,7 @@ export default function CreateVisitPage() {
         </div>
 
         <div style={{ marginBottom: '1.5rem' }}>
-          <label style={labelStyle}>Planned Departure Time</label>
+          <label style={labelStyle}>Planned Start Time</label>
           <input
             type="datetime-local"
             value={plannedDeparture}
