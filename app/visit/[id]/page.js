@@ -9,7 +9,24 @@ export default function VisitReportPage() {
   const router = useRouter()
   const [visit, setVisit] = useState(null)
   const [updates, setUpdates] = useState([])
+  const [isEditor, setIsEditor] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [message, setMessage] = useState('')
+
+  const loadData = async () => {
+    const vRes = await fetch('/api/visits')
+    const vData = await vRes.json()
+    if (vData.visits) {
+      const found = vData.visits.find(v => v.id === params.id)
+      setVisit(found || null)
+    }
+
+    const uRes = await fetch('/api/updates?visit_id=' + params.id)
+    const uData = await uRes.json()
+    if (uData.updates) {
+      setUpdates(uData.updates)
+    }
+  }
 
   useEffect(() => {
     const init = async () => {
@@ -19,23 +36,62 @@ export default function VisitReportPage() {
         return
       }
 
-      const vRes = await fetch('/api/visits')
-      const vData = await vRes.json()
-      if (vData.visits) {
-        const found = vData.visits.find(v => v.id === params.id)
-        setVisit(found || null)
-      }
+      // Check role — edit buttons are editor-only
+      const check = await fetch('/api/whoami', {
+        headers: { 'Authorization': `Bearer ${session.access_token}` },
+      })
+      const me = await check.json()
+      setIsEditor(me.role === 'editor')
 
-      const uRes = await fetch('/api/updates?visit_id=' + params.id)
-      const uData = await uRes.json()
-      if (uData.updates) {
-        setUpdates(uData.updates)
-      }
-
+      await loadData()
       setLoading(false)
     }
     init()
   }, [])
+
+  const handleEditUpdate = async (u) => {
+    const current = u.cleaned_readable_update || u.raw_text
+    const newText = prompt('Edit this update:', current)
+    if (newText === null) return
+    if (!newText.trim()) {
+      setMessage('❌ Update text cannot be empty')
+      return
+    }
+    if (newText.trim() === current) return
+
+    const res = await fetch('/api/updates', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ update_id: u.id, new_text: newText.trim() }),
+    })
+    const data = await res.json()
+    if (data.error) {
+      setMessage('❌ ' + data.error)
+    } else {
+      setMessage('✅ Update edited')
+      loadData()
+    }
+  }
+
+  const handleDeleteUpdate = async (u) => {
+    const preview = (u.cleaned_readable_update || u.raw_text || '').slice(0, 80)
+    if (!confirm(`🗑️ Delete this update?\n\n"${preview}..."\n\nThis cannot be undone.`)) {
+      return
+    }
+
+    const res = await fetch('/api/updates', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ update_id: u.id }),
+    })
+    const data = await res.json()
+    if (data.error) {
+      setMessage('❌ ' + data.error)
+    } else {
+      setMessage('🗑️ Update deleted')
+      loadData()
+    }
+  }
 
   const statusLabel = (status) => {
     const labels = {
@@ -95,28 +151,6 @@ export default function VisitReportPage() {
 
   const ft = (iso) => formatTimeInRegion(iso, visit.region)
 
-  const logEntries = [
-    {
-      id: 'created',
-      icon: '🗓',
-      time: visit.created_at,
-      text: 'Visit created',
-      isSystem: true,
-    },
-    ...updates.map(u => ({
-      id: u.id,
-      icon: entryIcon(u),
-      time: u.event_time || u.created_at,
-      text: u.cleaned_readable_update || u.raw_text,
-      security: u.security_issue,
-      delay: u.delay_flag,
-      access: u.access_denied,
-      quality: u.data_quality_issue,
-      review: u.needs_human_review,
-      isSystem: isButtonEntry(u),
-    })),
-  ]
-
   return (
     <main style={{ padding: '1.5rem', maxWidth: '800px', margin: '0 auto' }}>
 
@@ -160,6 +194,10 @@ export default function VisitReportPage() {
           🖨️ Print / Save as PDF
         </button>
       </div>
+
+      {message && (
+        <p className="no-print" style={{ marginBottom: '1rem', fontSize: '0.9rem' }}>{message}</p>
+      )}
 
       {/* Visit info */}
       <div style={{
@@ -222,14 +260,60 @@ export default function VisitReportPage() {
         </h2>
 
         <div>
-          {logEntries.map((entry, i) => (
-            <div key={entry.id} style={{
+          {/* Visit created entry */}
+          <div style={{
+            display: 'flex',
+            gap: '0.9rem',
+            paddingBottom: updates.length > 0 ? '1.1rem' : 0,
+            position: 'relative'
+          }}>
+            {updates.length > 0 && (
+              <div style={{
+                position: 'absolute',
+                left: '0.72rem',
+                top: '1.6rem',
+                bottom: 0,
+                width: '2px',
+                background: '#e2e8f0'
+              }} />
+            )}
+            <div style={{
+              width: '1.5rem',
+              height: '1.5rem',
+              flexShrink: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '0.95rem',
+              zIndex: 1,
+              background: 'white'
+            }}>
+              🗓
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{
+                fontSize: '0.8rem',
+                color: '#94a3b8',
+                fontWeight: 600,
+                marginBottom: '0.15rem'
+              }}>
+                {ft(visit.created_at)}
+              </div>
+              <div style={{ fontSize: '0.95rem', color: '#475569', fontWeight: 600 }}>
+                Visit created
+              </div>
+            </div>
+          </div>
+
+          {/* Updates */}
+          {updates.map((u, i) => (
+            <div key={u.id} style={{
               display: 'flex',
               gap: '0.9rem',
-              paddingBottom: i === logEntries.length - 1 ? 0 : '1.1rem',
+              paddingBottom: i === updates.length - 1 ? 0 : '1.1rem',
               position: 'relative'
             }}>
-              {i !== logEntries.length - 1 && (
+              {i !== updates.length - 1 && (
                 <div style={{
                   position: 'absolute',
                   left: '0.72rem',
@@ -251,48 +335,90 @@ export default function VisitReportPage() {
                 zIndex: 1,
                 background: 'white'
               }}>
-                {entry.icon}
+                {entryIcon(u)}
               </div>
 
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{
-                  fontSize: '0.8rem',
-                  color: '#94a3b8',
-                  fontWeight: 600,
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: '0.3rem',
                   marginBottom: '0.15rem'
                 }}>
-                  {ft(entry.time)}
+                  <span style={{
+                    fontSize: '0.8rem',
+                    color: '#94a3b8',
+                    fontWeight: 600
+                  }}>
+                    {ft(u.event_time || u.created_at)}
+                  </span>
+                  {isEditor && (
+                    <span className="no-print" style={{ display: 'flex', gap: '0.4rem' }}>
+                      <button
+                        onClick={() => handleEditUpdate(u)}
+                        style={{
+                          padding: '0.15rem 0.5rem',
+                          background: '#f1f5f9',
+                          color: '#475569',
+                          border: '1px solid #e2e8f0',
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          fontSize: '0.75rem',
+                          fontWeight: 600
+                        }}
+                      >
+                        ✏️ Edit
+                      </button>
+                      <button
+                        onClick={() => handleDeleteUpdate(u)}
+                        style={{
+                          padding: '0.15rem 0.5rem',
+                          background: '#fef2f2',
+                          color: '#b91c1c',
+                          border: '1px solid #fecaca',
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          fontSize: '0.75rem',
+                          fontWeight: 600
+                        }}
+                      >
+                        🗑️ Delete
+                      </button>
+                    </span>
+                  )}
                 </div>
                 <div style={{
                   fontSize: '0.95rem',
-                  color: entry.isSystem ? '#475569' : '#0f172a',
-                  fontWeight: entry.isSystem ? 600 : 400
+                  color: isButtonEntry(u) ? '#475569' : '#0f172a',
+                  fontWeight: isButtonEntry(u) ? 600 : 400
                 }}>
-                  {entry.text}
+                  {u.cleaned_readable_update || u.raw_text}
                 </div>
-                {(entry.security || entry.delay || entry.access || entry.quality || entry.review) && (
+                {(u.security_issue || u.delay_flag || u.access_denied || u.data_quality_issue || u.needs_human_review) && (
                   <div style={{ marginTop: '0.35rem', display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
-                    {entry.security && (
+                    {u.security_issue && (
                       <span style={{ background: '#fee2e2', color: '#991b1b', padding: '0.1rem 0.5rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600 }}>
                         🔴 Security
                       </span>
                     )}
-                    {entry.delay && (
+                    {u.delay_flag && (
                       <span style={{ background: '#fef3c7', color: '#92400e', padding: '0.1rem 0.5rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600 }}>
                         ⚠️ Delay
                       </span>
                     )}
-                    {entry.access && (
+                    {u.access_denied && (
                       <span style={{ background: '#f3e8ff', color: '#6b21a8', padding: '0.1rem 0.5rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600 }}>
                         🚧 Access Denied
                       </span>
                     )}
-                    {entry.quality && (
+                    {u.data_quality_issue && (
                       <span style={{ background: '#e0f2fe', color: '#075985', padding: '0.1rem 0.5rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600 }}>
                         📉 Data Quality
                       </span>
                     )}
-                    {entry.review && (
+                    {u.needs_human_review && (
                       <span style={{ background: '#e0e7ff', color: '#3730a3', padding: '0.1rem 0.5rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600 }}>
                         👀 Needs Review
                       </span>
