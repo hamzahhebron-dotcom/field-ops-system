@@ -28,7 +28,8 @@ export async function POST(request) {
   }
 }
 
-// Get all visits (each with its 2 latest updates, including flags)
+// Get all visits, each with its 2 latest updates
+// Update times are resolved server-side: event_time wins, else created_at
 export async function GET() {
   try {
     const { data, error } = await supabaseAdmin
@@ -42,13 +43,19 @@ export async function GET() {
 
     const { data: allUpdates } = await supabaseAdmin
       .from('visit_updates')
-      .select('id, visit_id, raw_text, cleaned_readable_update, created_at, security_issue, delay_flag, access_denied, data_quality_issue, needs_human_review')
-      .order('created_at', { ascending: false })
+      .select('id, visit_id, raw_text, cleaned_readable_update, created_at, event_time, security_issue, delay_flag, access_denied, data_quality_issue, needs_human_review')
 
     const visits = data.map(v => {
-      const updatesForVisit = (allUpdates || []).filter(
-        u => u.visit_id === v.id
-      )
+      const updatesForVisit = (allUpdates || [])
+        .filter(u => u.visit_id === v.id)
+        .map(u => ({
+          ...u,
+          // The display time: custom event time if set, otherwise submission time
+          display_time: u.event_time || u.created_at,
+        }))
+        // Sort by the resolved display time, newest first
+        .sort((a, b) => new Date(b.display_time).getTime() - new Date(a.display_time).getTime())
+
       return {
         ...v,
         recent_updates: updatesForVisit.slice(0, 2),
