@@ -310,48 +310,62 @@ export async function POST(request) {
   }
 }
 
-// Get updates: for one visit (?visit_id=xxx) or all flagged updates (?flagged=true)
-export async function GET(request) {
+// Edit an update's text or flags
+export async function PATCH(request) {
   try {
-    const { searchParams } = new URL(request.url)
-    const visitId = searchParams.get('visit_id')
-    const flaggedOnly = searchParams.get('flagged') === 'true'
+    const body = await request.json()
 
-    if (flaggedOnly) {
-      const { data, error } = await supabaseAdmin
-        .from('visit_updates')
-        .select('*')
-        .or('security_issue.eq.true,delay_flag.eq.true,access_denied.eq.true,data_quality_issue.eq.true')
-        .order('created_at', { ascending: false })
-
-      if (error) {
-        return NextResponse.json({ error: error.message }, { status: 400 })
-      }
-
-      return NextResponse.json({ updates: data })
+    if (!body.update_id) {
+      return NextResponse.json({ error: 'Missing update id' }, { status: 400 })
     }
 
-    if (!visitId) {
-      return NextResponse.json({ error: 'Missing visit_id' }, { status: 400 })
+    const changes = {}
+    if (typeof body.new_text === 'string' && body.new_text.trim().length > 0) {
+      changes.cleaned_readable_update = body.new_text.trim()
+    }
+    if (typeof body.security_issue === 'boolean') changes.security_issue = body.security_issue
+    if (typeof body.delay_flag === 'boolean') changes.delay_flag = body.delay_flag
+    if (typeof body.access_denied === 'boolean') changes.access_denied = body.access_denied
+    if (typeof body.data_quality_issue === 'boolean') changes.data_quality_issue = body.data_quality_issue
+
+    if (Object.keys(changes).length === 0) {
+      return NextResponse.json({ error: 'Nothing to change' }, { status: 400 })
     }
 
-    const { data, error } = await supabaseAdmin
+    const { error } = await supabaseAdmin
       .from('visit_updates')
-      .select('*')
-      .eq('visit_id', visitId)
-      .order('created_at', { ascending: true })
+      .update(changes)
+      .eq('id', body.update_id)
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 400 })
     }
 
-    const sorted = (data || []).sort((a, b) => {
-      const ta = new Date(a.event_time || a.created_at).getTime()
-      const tb = new Date(b.event_time || b.created_at).getTime()
-      return ta - tb
-    })
+    return NextResponse.json({ success: true })
+  } catch (err) {
+    return NextResponse.json({ error: 'Server error' }, { status: 500 })
+  }
+}
 
-    return NextResponse.json({ updates: sorted })
+// Delete an update
+export async function DELETE(request) {
+  try {
+    const body = await request.json()
+
+    if (!body.update_id) {
+      return NextResponse.json({ error: 'Missing update id' }, { status: 400 })
+    }
+
+    const { error } = await supabaseAdmin
+      .from('visit_updates')
+      .delete()
+      .eq('id', body.update_id)
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+
+    return NextResponse.json({ success: true })
   } catch (err) {
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
   }
