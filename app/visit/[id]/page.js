@@ -12,6 +12,7 @@ export default function VisitReportPage() {
   const [isEditor, setIsEditor] = useState(false)
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
+  const [flagEditorFor, setFlagEditorFor] = useState(null) // update id whose flag panel is open
 
   const loadData = async () => {
     const vRes = await fetch('/api/visits')
@@ -36,7 +37,6 @@ export default function VisitReportPage() {
         return
       }
 
-      // Check role — edit buttons are editor-only
       const check = await fetch('/api/whoami', {
         headers: { 'Authorization': `Bearer ${session.access_token}` },
       })
@@ -89,6 +89,22 @@ export default function VisitReportPage() {
       setMessage('❌ ' + data.error)
     } else {
       setMessage('🗑️ Update deleted')
+      setFlagEditorFor(null)
+      loadData()
+    }
+  }
+
+  const handleToggleFlag = async (u, flagKey) => {
+    const res = await fetch('/api/updates', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ update_id: u.id, [flagKey]: !u[flagKey] }),
+    })
+    const data = await res.json()
+    if (data.error) {
+      setMessage('❌ ' + data.error)
+    } else {
+      setMessage('✅ Flags updated')
       loadData()
     }
   }
@@ -137,6 +153,13 @@ export default function VisitReportPage() {
   }
 
   const isButtonEntry = (u) => u.raw_text && u.raw_text.startsWith('[BUTTON]')
+
+  const FLAG_DEFS = [
+    { key: 'security_issue', label: '🔴 Security', bg: '#fee2e2', color: '#991b1b' },
+    { key: 'delay_flag', label: '⚠️ Delay', bg: '#fef3c7', color: '#92400e' },
+    { key: 'access_denied', label: '🚧 Access Denied', bg: '#f3e8ff', color: '#6b21a8' },
+    { key: 'data_quality_issue', label: '📉 Data Quality', bg: '#e0f2fe', color: '#075985' },
+  ]
 
   if (loading) return <p style={{ padding: '2rem' }}>Loading...</p>
 
@@ -372,6 +395,21 @@ export default function VisitReportPage() {
                         ✏️ Edit
                       </button>
                       <button
+                        onClick={() => setFlagEditorFor(flagEditorFor === u.id ? null : u.id)}
+                        style={{
+                          padding: '0.15rem 0.5rem',
+                          background: flagEditorFor === u.id ? '#1a56db' : '#f1f5f9',
+                          color: flagEditorFor === u.id ? 'white' : '#475569',
+                          border: '1px solid ' + (flagEditorFor === u.id ? '#1a56db' : '#e2e8f0'),
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          fontSize: '0.75rem',
+                          fontWeight: 600
+                        }}
+                      >
+                        🚩 Flags
+                      </button>
+                      <button
                         onClick={() => handleDeleteUpdate(u)}
                         style={{
                           padding: '0.15rem 0.5rem',
@@ -389,6 +427,7 @@ export default function VisitReportPage() {
                     </span>
                   )}
                 </div>
+
                 <div style={{
                   fontSize: '0.95rem',
                   color: isButtonEntry(u) ? '#475569' : '#0f172a',
@@ -396,33 +435,55 @@ export default function VisitReportPage() {
                 }}>
                   {u.cleaned_readable_update || u.raw_text}
                 </div>
+
+                {/* Current flags display */}
                 {(u.security_issue || u.delay_flag || u.access_denied || u.data_quality_issue || u.needs_human_review) && (
                   <div style={{ marginTop: '0.35rem', display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
-                    {u.security_issue && (
-                      <span style={{ background: '#fee2e2', color: '#991b1b', padding: '0.1rem 0.5rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600 }}>
-                        🔴 Security
+                    {FLAG_DEFS.map(f => u[f.key] && (
+                      <span key={f.key} style={{ background: f.bg, color: f.color, padding: '0.1rem 0.5rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600 }}>
+                        {f.label}
                       </span>
-                    )}
-                    {u.delay_flag && (
-                      <span style={{ background: '#fef3c7', color: '#92400e', padding: '0.1rem 0.5rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600 }}>
-                        ⚠️ Delay
-                      </span>
-                    )}
-                    {u.access_denied && (
-                      <span style={{ background: '#f3e8ff', color: '#6b21a8', padding: '0.1rem 0.5rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600 }}>
-                        🚧 Access Denied
-                      </span>
-                    )}
-                    {u.data_quality_issue && (
-                      <span style={{ background: '#e0f2fe', color: '#075985', padding: '0.1rem 0.5rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600 }}>
-                        📉 Data Quality
-                      </span>
-                    )}
+                    ))}
                     {u.needs_human_review && (
                       <span style={{ background: '#e0e7ff', color: '#3730a3', padding: '0.1rem 0.5rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600 }}>
                         👀 Needs Review
                       </span>
                     )}
+                  </div>
+                )}
+
+                {/* Flag editor panel */}
+                {isEditor && flagEditorFor === u.id && (
+                  <div className="no-print" style={{
+                    marginTop: '0.5rem',
+                    padding: '0.6rem 0.75rem',
+                    background: '#f8fafc',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '8px'
+                  }}>
+                    <p style={{ margin: '0 0 0.4rem', fontSize: '0.75rem', color: '#94a3b8', fontWeight: 600 }}>
+                      Toggle flags for this update — tap to add or remove:
+                    </p>
+                    <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                      {FLAG_DEFS.map(f => (
+                        <button
+                          key={f.key}
+                          onClick={() => handleToggleFlag(u, f.key)}
+                          style={{
+                            padding: '0.25rem 0.6rem',
+                            background: u[f.key] ? f.bg : 'white',
+                            color: u[f.key] ? f.color : '#94a3b8',
+                            border: u[f.key] ? `2px solid ${f.color}` : '2px dashed #e2e8f0',
+                            borderRadius: '6px',
+                            cursor: 'pointer',
+                            fontSize: '0.75rem',
+                            fontWeight: 600
+                          }}
+                        >
+                          {f.label} {u[f.key] ? '✓' : '+'}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
