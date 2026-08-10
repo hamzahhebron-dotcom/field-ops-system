@@ -63,17 +63,26 @@ Original: "Signal received from Serghei that convoy moved, will take 80 min to a
 CORRECT: "Signal received from Serghei that the convoy has moved and will take 80 minutes to arrive at the warehouse; the enumerators are 20 minutes away and will remain on standby."
 WRONG: "The convoy is on the way and enumerators are waiting." (details dropped — never do this)
 
-FLAG DEFINITIONS — these concern the SAFETY and WORK of the field enumerator:
+FLAG DEFINITIONS — flags mark PROBLEMS, not routine field procedures.
 
-securityIssue = true when there is ANY concern for the enumerator's safety or whereabouts:
+CRITICAL PRINCIPLE — ROUTINE vs INCIDENT:
+Normal field procedures are NOT flagged. These are all ROUTINE and get NO flags:
+- Waiting at a gate/door for security or guards to grant entry (standard check-in procedure)
+- Routine ID checks, registration, sign-in at facilities
+- Normal waiting at checkpoints without trouble
+- Coordination pauses (waiting for a focal point, waiting for a convoy signal, standby)
+A flag requires an actual PROBLEM: a threat, a refusal, a loss, an abnormal situation.
+
+securityIssue = true ONLY when there is an actual safety concern:
 - Security incidents, threats, shooting, shelling, detention, arrest
-- Checkpoint trouble beyond routine waiting
+- Checkpoint trouble BEYOND routine waiting (harassment, confiscation, being held)
 - LOSS OF CONTACT: the enumerator is unreachable, not responding, silent, missing, or has not checked in for an extended period — this is ALWAYS a security issue, never a data quality issue
 - Evacuations, closures for security reasons, nearby hostilities
+- The mere presence of the WORD "security" (e.g. "waiting for security to open the gate") is NOT a security issue.
 
-delayFlag = true when the enumerator or the visit is running behind schedule (traffic, waiting, late start, prolonged stops).
+delayFlag = true ONLY when the update states the visit is actually running behind schedule or explicitly calls it a delay. Routine short waits that are part of normal procedure are NOT delays.
 
-accessDenied = true when the enumerator was refused entry, turned away, the site was closed, or permission was denied — the visit could not proceed as planned.
+accessDenied = true ONLY when entry was actually REFUSED: turned away, site closed to them, permission denied. WAITING to be let in is not access denied — being told NO is.
 
 dataQualityIssue = true ONLY for problems with the collected data itself:
 - Respondents unavailable or refusing interviews
@@ -82,15 +91,20 @@ dataQualityIssue = true ONLY for problems with the collected data itself:
 This flag is about THE DATA, never about the enumerator's safety or reachability.
 
 EXAMPLES:
-- "Enumerator hasn't responded for 3 hours" → securityIssue: true, riskLevel: "medium" or higher, dataQualityIssue: false
+- "Team at the door waiting for security to let them in" → NO FLAGS (routine entry procedure)
+- "Waiting at reception for the focal point" → NO FLAGS (routine)
+- "Passed the checkpoint after normal ID check" → NO FLAGS (routine)
+- "Enumerator hasn't responded for 3 hours" → securityIssue: true, riskLevel: "medium" or higher
 - "We lost contact with Yaser" → securityIssue: true
-- "Only reached 60% of beneficiaries" → dataQualityIssue: true, securityIssue: false
-- "Turned away at the gate by authorities" → accessDenied: true
-- "Stuck in traffic, 30 min late" → delayFlag: true
+- "Held at checkpoint for 2 hours, soldiers took their IDs" → securityIssue: true, delayFlag: true
+- "Only reached 60% of beneficiaries" → dataQualityIssue: true
+- "Turned away at the gate by authorities, visit cannot proceed" → accessDenied: true
+- "Stuck in traffic, 30 min behind schedule" → delayFlag: true
 - "Shooting heard near the site, team sheltering" → securityIssue: true, riskLevel: "high"
 
 STRICT RULES:
-- Do NOT invent information that is not in the text. Flags are false unless the text clearly indicates them.
+- Do NOT invent information that is not in the text. Flags are false unless the text clearly indicates an actual problem.
+- When in doubt whether something is routine or a problem, do NOT flag it.
 - Multiple flags can be true at once when the text supports them.
 - Only set "status" if the text CLEARLY states a movement or stage change. Otherwise use "unknown".
 - NEVER set status to any completion or return state based on future plans or intentions.
